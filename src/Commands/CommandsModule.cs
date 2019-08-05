@@ -69,20 +69,19 @@ namespace Karvis.Commands
         [Command("speak")]
         public async Task Speak(CommandContext ctx, [RemainingText] string text)
         {
-            // Guard inputs and required instances
+            // Guard inputs
             if (String.IsNullOrWhiteSpace(text))
                 throw new InvalidOperationException("No text to speak.");
 
-            var vnext = ctx.Client.GetVoiceNext();
-
-            var vnc = vnext.GetConnection(ctx.Guild);
+            // Get a VoiceNextConnection object
+            var vnc = ctx.Client.GetVoiceNext().GetConnection(ctx.Guild);
             if (vnc == null)
                 throw new InvalidOperationException("Not connected in this guild.");
 
-            // Process the request
+            // Process the speech request
             await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thinking:"));
 
-            var buffer = await new SpeechModule(vnext.Client.DebugLogger).SynthesisToSpeakerAsync(text);
+            var buffer = await new SpeechModule(ctx.Client.DebugLogger).SynthesisToSpeakerAsync(text);
 
             if (buffer.Length == 0)
             {
