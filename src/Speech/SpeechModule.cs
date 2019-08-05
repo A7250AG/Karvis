@@ -17,7 +17,7 @@ namespace Karvis.Speech
             this.debugLogger = debugLogger;
         }
 
-        public async Task<byte[]> SynthesisToSpeakerAsync(string text)
+        public async Task<byte[]> SynthesisToStreamAsync(string text)
         {
             debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName, $"Synthesizing speech for text [{text}]", DateTime.Now);
 
@@ -85,6 +85,7 @@ namespace Karvis.Speech
             using (var rs = new RawSourceWaveStream(ms, new WaveFormat(16000, 16, 1)))
             using (var resampler = new MediaFoundationResampler(rs, new WaveFormat(48000, 16, 2)))
             {
+                // thanks https://csharp.hotexamples.com/examples/NAudio.Wave/MediaFoundationResampler/Read/php-mediafoundationresampler-read-method-examples.html#0xe8c3188aa82ab5c60c681c14b7336b52f1b3546fd75d133baef6572074b6028c-125,,155,
                 byte[] bytes = new byte[rs.WaveFormat.AverageBytesPerSecond * 4];
                 while (true)
                 {
