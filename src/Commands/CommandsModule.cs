@@ -1,18 +1,16 @@
-﻿using DSharpPlus.CommandsNext;
-using DSharpPlus.CommandsNext.Attributes;
-using DSharpPlus.Interactivity;
-using DSharpPlus.VoiceNext;
-using DSharpPlus.Lavalink;
-using Karvis.Speech;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using DSharpPlus.Net;
-using DSharpPlus.Lavalink.EventArgs;
+﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using DSharpPlus;
+using DSharpPlus.CommandsNext;
+using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
+using DSharpPlus.Interactivity;
+using DSharpPlus.Lavalink;
+using DSharpPlus.Lavalink.EventArgs;
+using DSharpPlus.Net;
+using DSharpPlus.VoiceNext;
+using Karvis.Speech;
 
 namespace Karvis.Commands
 {
@@ -71,6 +69,7 @@ namespace Karvis.Commands
         [Command("speak")]
         public async Task Speak(CommandContext ctx, [RemainingText] string text)
         {
+            // Guard inputs and required instances
             if (String.IsNullOrWhiteSpace(text))
                 throw new InvalidOperationException("No text to speak.");
 
@@ -80,15 +79,27 @@ namespace Karvis.Commands
             if (vnc == null)
                 throw new InvalidOperationException("Not connected in this guild.");
 
-            await ctx.RespondAsync("👌");
+            // Process the request
+            await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thinking:"));
 
             var buffer = await new SpeechModule(vnext.Client.DebugLogger).SynthesisToSpeakerAsync(text);
 
-            vnc.SendSpeaking(); // send a speaking indicator
-            await vnc.GetTransmitStream().WriteAsync(buffer);
-            await vnc.GetTransmitStream().FlushAsync();
+            if (buffer.Length == 0)
+            {
+                await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsdown:"));
+                return;
+            }
+            else
+            {
+                await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsup:"));
 
-            vnc.SendSpeaking(false);
+                vnc.SendSpeaking(); // send a speaking indicator
+
+                await vnc.GetTransmitStream().WriteAsync(buffer);
+                await vnc.GetTransmitStream().FlushAsync();
+
+                vnc.SendSpeaking(false); // end the speaking indicator
+            }
         }
 
         #region Lavalink
