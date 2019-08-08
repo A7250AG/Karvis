@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Commands\CommandsModule.cs~RF5f4b447.TMP" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.6.0" />
     <PackageReference Include="NAudio" Version="1.9.0" />
   </ItemGroup>
