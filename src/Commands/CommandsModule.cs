@@ -129,25 +129,7 @@ namespace Karvis.Commands
 
             var buff = UserSpeech[ctx.User.Id].ToArray();
 
-            byte[] resampled;
-            // NAudio resampling from Azure Speech default to Opus default 
-            using (var output = new MemoryStream())
-            using (var ms = new MemoryStream(buff))
-            using (var rs = new RawSourceWaveStream(ms, new WaveFormat(@in, 16, 2)))
-            using (var resampler = new MediaFoundationResampler(rs, new WaveFormat(@out, 16, 2)))
-            {
-                // thanks https://csharp.hotexamples.com/examples/NAudio.Wave/MediaFoundationResampler/Read/php-mediafoundationresampler-read-method-examples.html#0xe8c3188aa82ab5c60c681c14b7336b52f1b3546fd75d133baef6572074b6028c-125,,155,
-                byte[] bytes = new byte[rs.WaveFormat.AverageBytesPerSecond * 4];
-                while (true)
-                {
-                    int bytesRead = resampler.Read(bytes, 0, bytes.Length);
-                    if (bytesRead == 0)
-                        break;
-                    output.Write(bytes, 0, bytesRead);
-                }
-
-                resampled = output.GetBuffer();
-            }
+            byte[] resampled = AudioConverter.Resample(buff, @in, @out, 2, 2);
 
             voiceConnection.SendSpeaking();
             await voiceConnection.GetTransmitStream().WriteAsync(resampled);
