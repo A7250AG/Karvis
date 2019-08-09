@@ -30,7 +30,7 @@ namespace Karvis
         {
             discord = new DiscordClient(new DiscordConfiguration
             {
-                Token = "NjA2ODAzNzI3OTc4MDcwMDE3.XUbqHA.wytowOkFx6XJNq8NTiA4RKujTr4",
+                Token = "token",
                 TokenType = TokenType.Bot,
                 UseInternalLogHandler = true,
                 LogLevel = LogLevel.Debug,

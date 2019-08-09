@@ -47,94 +47,123 @@ namespace Karvis.Commands
         [Command("join")]
         public async Task Join(CommandContext ctx)
         {
-            var discordClient = ctx.Client;
-            var voiceClient = discordClient.GetVoiceNext();
-            var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+            try
+            {
+                var discordClient = ctx.Client;
+                var voiceClient = discordClient.GetVoiceNext();
+                var voiceConnection = voiceClient.GetConnection(ctx.Guild);
 
-            if (voiceConnection != null) throw new InvalidOperationException("I'm already connected to a voice channel in this guild.");
+                if (voiceConnection != null) throw new InvalidOperationException("I'm already connected to a voice channel in this guild.");
 
-            var voiceChannel = ctx.Member?.VoiceState?.Channel;
+                var voiceChannel = ctx.Member?.VoiceState?.Channel;
 
-            if (voiceChannel == null) throw new InvalidOperationException("You need to be connected to a voice channel for me to join it.");
+                if (voiceChannel == null) throw new InvalidOperationException("You need to be connected to a voice channel for me to join it.");
 
-            voiceConnection = await voiceChannel.ConnectAsync();
+                voiceConnection = await voiceChannel.ConnectAsync();
 
-            await ctx.RespondAsync("I've joined your voice channel.");
+                await ctx.RespondAsync("I've joined your voice channel.");
 
-            voiceConnection.VoiceReceived += OnVoiceReceived;
-            voiceConnection.UserSpeaking += (args) => OnUserSpeaking(args, discordClient, ctx.Channel);
+                voiceConnection.VoiceReceived += OnVoiceReceived;
+                voiceConnection.UserSpeaking += (args) => OnUserSpeaking(args, discordClient, ctx.Channel);
+            }
+            catch (Exception ex)
+            {
+                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't join. \n\n``{ex.Message}``");
+            }
         }
 
         [Command("leave")]
         public async Task Leave(CommandContext ctx, string force = null)
         {
-            var discordClient = ctx.Client;
-            var voiceClient = discordClient.GetVoiceNext();
-            var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+            try
+            {
+                var discordClient = ctx.Client;
+                var voiceClient = discordClient.GetVoiceNext();
+                var voiceConnection = voiceClient.GetConnection(ctx.Guild);
 
-            if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel && force?.ToLowerInvariant() != "force"))
-                throw new InvalidOperationException("I'm not connected to your voice channel.");
+                if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel && force?.ToLowerInvariant() != "force"))
+                    throw new InvalidOperationException("I'm not connected to your voice channel.");
 
-            voiceConnection.Disconnect();
+                voiceConnection.Disconnect();
 
-            await ctx.RespondAsync("I've left your voice channel.");
+                await ctx.RespondAsync("I've left your voice channel.");
+            }
+            catch (Exception ex)
+            {
+                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't leave. \n\n``{ex.Message}``");
+            }
         }
 
         [Command("say")]
         public async Task Say(CommandContext ctx, [RemainingText] string text)
         {
-            // Guard inputs
-            if (string.IsNullOrWhiteSpace(text))
-                throw new InvalidOperationException("No text to speak.");
-
-            // Get a VoiceNextConnection object
-            var vnc = ctx.Client.GetVoiceNext().GetConnection(ctx.Guild);
-            if (vnc == null)
-                throw new InvalidOperationException("Not connected in this guild.");
-
-            // Process the speech request
-            await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thinking:"));
-
-            var buffer = await new AzureSpeechModule(ctx.Client.DebugLogger).TextToAudioAsync(text);
-
-            if (buffer.Length == 0)
+            try
             {
-                await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsdown:"));
-                return;
+                // Guard inputs
+                if (string.IsNullOrWhiteSpace(text))
+                    throw new InvalidOperationException("No text to speak.");
+
+                // Get a VoiceNextConnection object
+                var voiceConnection = ctx.Client.GetVoiceNext().GetConnection(ctx.Guild);
+                if (voiceConnection == null || voiceConnection.Channel != ctx.Member?.VoiceState?.Channel)
+                    throw new InvalidOperationException("Not connected to your voice channel in this guild.");
+
+                // Process the speech request
+                await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thinking:"));
+
+                var buffer = await new AzureSpeechModule(ctx.Client.DebugLogger).TextToAudioAsync(text);
+
+                if (buffer.Length == 0)
+                {
+                    await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsdown:"));
+                    return;
+                }
+                else
+                {
+                    await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsup:"));
+
+                    voiceConnection.SendSpeaking(); // send a speaking indicator
+
+                    await voiceConnection.GetTransmitStream().WriteAsync(buffer);
+                    await voiceConnection.GetTransmitStream().FlushAsync();
+
+                    voiceConnection.SendSpeaking(false); // end the speaking indicator
+                }
             }
-            else
+            catch (Exception ex)
             {
-                await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsup:"));
-
-                vnc.SendSpeaking(); // send a speaking indicator
-
-                await vnc.GetTransmitStream().WriteAsync(buffer);
-                await vnc.GetTransmitStream().FlushAsync();
-
-                vnc.SendSpeaking(false); // end the speaking indicator
+                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't say. \n\n``{ex.Message}``");
             }
         }
 
         [Command("simonsay")]
         public async Task SimonSay(CommandContext ctx, string force = null, int @in = 22000, int @out = 44100)
         {
-            var discordClient = ctx.Client;
-            var voiceClient = discordClient.GetVoiceNext();
-            var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+            try
+            {
+                var discordClient = ctx.Client;
+                var voiceClient = discordClient.GetVoiceNext();
+                var voiceConnection = voiceClient.GetConnection(ctx.Guild);
 
-            if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel && force?.ToLowerInvariant() != "force"))
-                throw new InvalidOperationException("I'm not connected to your voice channel.");
+                if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel && force?.ToLowerInvariant() != "force"))
+                    throw new InvalidOperationException("I'm not connected to your voice channel.");
 
-            if (!UserSpeech.ContainsKey(ctx.User.Id) || UserSpeech[ctx.User.Id].IsEmpty) return;
+                if (!UserSpeech.ContainsKey(ctx.User.Id) || UserSpeech[ctx.User.Id].IsEmpty)
+                    throw new InvalidOperationException("You haven't said or preserved anything for me to say.");
 
-            var buff = UserSpeech[ctx.User.Id].ToArray();
+                var buff = UserSpeech[ctx.User.Id].ToArray();
 
-            byte[] resampled = AudioConverter.Resample(buff, @in, @out, 2, 2);
+                byte[] resampled = AudioConverter.Resample(buff, @in, @out, 2, 2);
 
-            voiceConnection.SendSpeaking();
-            await voiceConnection.GetTransmitStream().WriteAsync(resampled);
-            await voiceConnection.GetTransmitStream().FlushAsync();
-            voiceConnection.SendSpeaking(false);
+                voiceConnection.SendSpeaking();
+                await voiceConnection.GetTransmitStream().WriteAsync(resampled);
+                await voiceConnection.GetTransmitStream().FlushAsync();
+                voiceConnection.SendSpeaking(false);
+            }
+            catch (Exception ex)
+            {
+                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't simonsay. \n\n``{ex.Message}``");
+            }
         }
 
         [Command("transcribe")]
@@ -144,7 +173,7 @@ namespace Karvis.Commands
 
             var buff = UserSpeech[ctx.User.Id].ToArray();
 
-            var resampled = AudioConverter.Resample(buff, 22000, 44100, 2, 2);
+            var resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
 
             await ctx.RespondAsync("I think I heard you say: " + await new AzureSpeechModule(ctx.Client.DebugLogger).AudioToTextAsync(resampled));
         }
@@ -158,7 +187,14 @@ namespace Karvis.Commands
 
         }
 
-        public async Task OnVoiceReceivedDoPassthrough(VoiceReceiveEventArgs ea, VoiceNextConnection voiceConnection)
+        [Command("clear")]
+        public async Task ClearSpeech(CommandContext ctx)
+        {
+            if (UserSpeech.ContainsKey(ctx.User.Id)) UserSpeech[ctx.User.Id] = new ConcurrentQueue<byte>();
+
+        }
+
+        public async Task OnVoiceReceivedPassthrough(VoiceReceiveEventArgs ea, VoiceNextConnection voiceConnection)
         {
             var buff = ea.PcmData.ToArray();
 
@@ -168,6 +204,7 @@ namespace Karvis.Commands
 
         public async Task OnVoiceReceived(VoiceReceiveEventArgs ea)
         {
+            var sampleRate = ea.AudioFormat.SampleRate;
             if (ea.User != null)
             {
                 var user = true;
@@ -193,10 +230,11 @@ namespace Karvis.Commands
                 {
                     var buff = UserSpeech[args.User.Id].ToArray();
 
-                    byte[] resampled = AudioConverter.Resample(buff, 22000, 44100, 2, 2);
+                    byte[] resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
 
-                    await args.Client.SendMessageAsync(responseChannel, args.User.Username + ", I think I heard you say: " + await new AzureSpeechModule(client.DebugLogger).AudioToTextAsync(resampled));
+                    var text = await new AzureSpeechModule(client.DebugLogger).AudioToTextAsync(resampled);
 
+                    await args.Client.SendMessageAsync(responseChannel, args.User.Username + ", I think I heard you say: " + text);
 
                     if (UserPreserveSpeech.ContainsKey(args.User.Id) && !UserPreserveSpeech[args.User.Id]) UserSpeech[args.User.Id] = new ConcurrentQueue<byte>();
                 }
