@@ -8,14 +8,20 @@ using DSharpPlus.VoiceNext;
 using Karvis.Commands;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Karvis.Configuration;
 
 namespace Karvis
 {
     class Program
     {
+        private static KarvisConfiguration karvisConfiguration;
         static DiscordClient discord;
         static CommandsNextExtension commands;
         static InteractivityExtension interactivity;
@@ -26,11 +32,19 @@ namespace Karvis
         {
             MainAsync(args).ConfigureAwait(false).GetAwaiter().GetResult();
         }
+
         static async Task MainAsync(string[] args)
         {
-            discord = new DiscordClient(new DiscordConfiguration
+            // Create service collection and configure our services
+            var serviceProvider = new ServiceCollection()
+                .AddSingleton<IKarvisConfigurationService>(new KarvisConfigurationService())
+                .BuildServiceProvider();
+
+            karvisConfiguration = serviceProvider.GetService<IKarvisConfigurationService>().Configuration;
+
+            discord = new DiscordClient(new DSharpPlus.DiscordConfiguration()
             {
-                Token = "token",
+                Token = karvisConfiguration.DiscordConfiguration.Token,
                 TokenType = TokenType.Bot,
                 UseInternalLogHandler = true,
                 LogLevel = LogLevel.Debug,
@@ -51,7 +65,8 @@ namespace Karvis
             commands = discord.UseCommandsNext(new CommandsNextConfiguration
             {
                 StringPrefixes = new List<string>() { ";;", "->" },
-                EnableDms = false // required for UseVoiceNext?
+                EnableDms = false, // required for UseVoiceNext?
+                Services = serviceProvider
             });
 
             commands.RegisterCommands<CommandsModule>();

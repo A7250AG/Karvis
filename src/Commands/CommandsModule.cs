@@ -18,6 +18,8 @@ using DSharpPlus.VoiceNext.EventArgs;
 using Karvis.Audio;
 using Karvis.Speech;
 using NAudio.Wave;
+using Karvis.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Karvis.Commands
 {
@@ -25,6 +27,15 @@ namespace Karvis.Commands
     {
         private static ConcurrentDictionary<ulong, bool> UserPreserveSpeech = new ConcurrentDictionary<ulong, bool>();
         private static ConcurrentDictionary<ulong, ConcurrentQueue<byte>> UserSpeech = new ConcurrentDictionary<ulong, ConcurrentQueue<byte>>();
+
+        private readonly KarvisConfiguration KarvisConfiguration;
+
+        public CommandsModule(IKarvisConfigurationService configuration)
+        {
+            //ServiceProvider = serviceProvider;
+            KarvisConfiguration = configuration.Configuration;
+        }
+
 
         [Command("hi")]
         public async Task Hi(CommandContext ctx)
@@ -65,6 +76,14 @@ namespace Karvis.Commands
 
                 voiceConnection.VoiceReceived += OnVoiceReceived;
                 voiceConnection.UserSpeaking += (args) => OnUserSpeaking(args, discordClient, ctx.Channel);
+
+                if (this.Lavalink != null)
+                {
+                    this.LavalinkVoice = await this.Lavalink.ConnectAsync(voiceChannel);
+                    this.LavalinkVoice.PlaybackFinished += (args) => this.LavalinkVoice_PlaybackFinished(args, ctx.Channel);
+
+                    await ctx.RespondAsync("I've connected to lavalink.");
+                }
             }
             catch (Exception ex)
             {
@@ -111,7 +130,7 @@ namespace Karvis.Commands
                 // Process the speech request
                 await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thinking:"));
 
-                var buffer = await new AzureSpeechModule(ctx.Client.DebugLogger).TextToAudioAsync(text);
+                var buffer = await new AzureSpeechModule(KarvisConfiguration, ctx.Client.DebugLogger).TextToAudioAsync(text);
 
                 if (buffer.Length == 0)
                 {
@@ -175,7 +194,7 @@ namespace Karvis.Commands
 
             var resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
 
-            await ctx.RespondAsync("I think I heard you say: " + await new AzureSpeechModule(ctx.Client.DebugLogger).AudioToTextAsync(resampled));
+            await ctx.RespondAsync("I think I heard you say: " + await new AzureSpeechModule(KarvisConfiguration, ctx.Client.DebugLogger).AudioToTextAsync(resampled));
         }
 
         [Command("preserve")]
@@ -232,7 +251,7 @@ namespace Karvis.Commands
 
                     byte[] resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
 
-                    var text = await new AzureSpeechModule(client.DebugLogger).AudioToTextAsync(resampled);
+                    var text = await new AzureSpeechModule(KarvisConfiguration, client.DebugLogger).AudioToTextAsync(resampled);
 
                     await args.Client.SendMessageAsync(responseChannel, args.User.Username + ", I think I heard you say: " + text);
 
@@ -306,6 +325,15 @@ namespace Karvis.Commands
             this.LavalinkVoice.Play(track);
 
             await ctx.RespondAsync($"Now playing: {Formatter.Bold(Formatter.Sanitize(track.Title))} by {Formatter.Bold(Formatter.Sanitize(track.Author))}.").ConfigureAwait(false);
+        }
+
+        [Command("stop")]
+        public async Task StopAsync(CommandContext ctx)
+        {
+            if (this.Lavalink == null)
+                return;
+
+            this.LavalinkVoice.Stop();
         }
 
         #region Lavalink Events

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using DSharpPlus;
 using Karvis.Audio;
+using Karvis.Configuration;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 
@@ -10,18 +11,16 @@ namespace Karvis.Speech
 {
     public class AzureSpeechModule
     {
-        // Creates an instance of a speech config with specified subscription key and service region.
-        // Replace with your own subscription key and service region (e.g., "westus").
-        private static readonly SpeechConfig SpeechConfig = SpeechConfig.FromSubscription("subscription-key", "region");
+        private readonly SpeechConfig SpeechConfig;
+        private readonly DebugLogger DebugLogger;
+        private readonly TaskCompletionSource<int> StopRecognition = new TaskCompletionSource<int>();
 
         private static readonly ConcurrentDictionary<Guid, string> Text = new ConcurrentDictionary<Guid, string>();
 
-        private readonly DebugLogger debugLogger;
-        private readonly TaskCompletionSource<int> StopRecognition = new TaskCompletionSource<int>();
-
-        public AzureSpeechModule(DebugLogger debugLogger)
+        public AzureSpeechModule(KarvisConfiguration configuration, DebugLogger debugLogger)
         {
-            this.debugLogger = debugLogger;
+            DebugLogger = debugLogger;
+            SpeechConfig = SpeechConfig.FromSubscription(configuration.AzureSpeechConfiguration.SubscriptionKey, configuration.AzureSpeechConfiguration.Region);
         }
 
         public async Task<string> AudioToTextAsync(byte[] pcm)
@@ -62,7 +61,7 @@ namespace Karvis.Speech
 
         public async Task<byte[]> TextToAudioAsync(string text)
         {
-            debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+            DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                 $"AzureSpeechModule: Synthesizing speech for text [{text}]", DateTime.Now);
 
             // Creates a speech synthesizer using the default speaker as audio output.
@@ -71,12 +70,12 @@ namespace Karvis.Speech
             {
                 if (SpeechWasSynthesized(result))
                 {
-                    debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                         $"AzureSpeechModule: Speech synthesized for text [{text}]", DateTime.Now);
                     return AudioConverter.Resample(result.AudioData, 16000, 48000, 1, 2);
                 }
 
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     $"AzureSpeechModule: Speech synthesized failed for text [{text}]", DateTime.Now);
 
                 return new byte[0];
@@ -109,16 +108,16 @@ namespace Karvis.Speech
             if (result.Reason == ResultReason.Canceled)
             {
                 var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     $"AzureSpeechModule: CANCELED: Reason={cancellation.Reason}", DateTime.Now);
 
                 if (cancellation.Reason == CancellationReason.Error)
                 {
-                    debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                    DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                         $"AzureSpeechModule: CANCELED: ErrorCode={cancellation.ErrorCode}", DateTime.Now);
-                    debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                    DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                         $"AzureSpeechModule: CANCELED: ErrorDetails=[{cancellation.ErrorDetails}]", DateTime.Now);
-                    debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                    DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                         "AzureSpeechModule: CANCELED: Did you update the subscription info?", DateTime.Now);
                 }
             }
@@ -130,56 +129,56 @@ namespace Karvis.Speech
         {
             if (e.Result.Reason == ResultReason.RecognizedSpeech)
             {
-                debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                     $"AzureSpeechModule: RECOGNIZED: Text={e.Result.Text}", DateTime.Now);
                 Text[guid] = e.Result.Text;
             }
             else if (e.Result.Reason == ResultReason.NoMatch)
             {
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     "AzureSpeechModule: NOMATCH: Speech could not be recognized.", DateTime.Now);
             }
         }
 
         private void OnSpeechRecognitionSessionStarted(object s, SessionEventArgs e)
         {
-            debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+            DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                 "AzureSpeechModule: Speech recognition session started.", DateTime.Now);
         }
 
         private void OnSpeechRecognitionSessionStopped(object s, SessionEventArgs e)
         {
-            debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+            DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                 "AzureSpeechModule: Speech recognition session stopped.", DateTime.Now);
-            debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName, "AzureSpeechModule: Stopping recognition.",
+            DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName, "AzureSpeechModule: Stopping recognition.",
                 DateTime.Now);
 
             if (StopRecognition.TrySetResult(0))
-                debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                     "AzureSpeechModule: Stopped recognition session.", DateTime.Now);
             else
-                debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                     "AzureSpeechModule: Failed to stop recognition session.", DateTime.Now);
         }
 
         private void OnSpeechRecognizing(object s, SpeechRecognitionEventArgs e)
         {
-            debugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+            DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
                 $"AzureSpeechModule: RECOGNIZING: Text={e.Result.Text}", DateTime.Now);
         }
 
         private void OnSpeechCanceled(object s, SpeechRecognitionCanceledEventArgs e)
         {
-            debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+            DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                 $"AzureSpeechModule: CANCELED: Reason={e.Reason}", DateTime.Now);
 
             if (e.Reason == CancellationReason.Error)
             {
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     $"AzureSpeechModule: CANCELED: ErrorCode={e.ErrorCode}", DateTime.Now);
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     $"AzureSpeechModule: CANCELED: ErrorDetails={e.ErrorDetails}", DateTime.Now);
-                debugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
                     "AzureSpeechModule: CANCELED: Did you update the subscription info?", DateTime.Now);
             }
 

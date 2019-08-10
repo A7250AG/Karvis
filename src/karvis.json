@@ -1,0 +1,9 @@
+{
+  "DiscordConfiguration": {
+    "Token": "token"
+  },
+  "AzureSpeechConfiguration": {
+    "SubscriptionKey": "subscription-key",
+    "Region": "region"
+  }
+}
