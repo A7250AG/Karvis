@@ -8,5 +8,6 @@ namespace Karvis.Configuration
     {
         public AzureSpeechConfiguration AzureSpeechConfiguration { get; set; }
         public DiscordConfiguration DiscordConfiguration { get; set; }
+        public GoogleAssistantConfiguration GoogleAssistantConfiguration { get; set; }
     }
 }

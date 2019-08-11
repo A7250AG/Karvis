@@ -10,6 +10,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CoreHtmlToImage" Version="1.0.5" />
+    <PackageReference Include="Google.Protobuf" Version="3.9.1" />
+    <PackageReference Include="Grpc" Version="1.22.0" />
+    <PackageReference Include="Grpc.Auth" Version="1.0.1" />
+    <PackageReference Include="Grpc.Tools" Version="1.22.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.6.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.2.4" />
@@ -20,21 +28,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\third-party\DSharpPlus\DSharpPlus.CommandsNext\DSharpPlus.CommandsNext.csproj" />
-    <ProjectReference Include="..\third-party\DSharpPlus\DSharpPlus.Interactivity\DSharpPlus.Interactivity.csproj" />
-    <ProjectReference Include="..\third-party\DSharpPlus\DSharpPlus.Lavalink\DSharpPlus.Lavalink.csproj" />
-    <ProjectReference Include="..\third-party\DSharpPlus\DSharpPlus.VoiceNext\DSharpPlus.VoiceNext.csproj" />
-    <ProjectReference Include="..\third-party\DSharpPlus\DSharpPlus\DSharpPlus.csproj" />
+    <ProjectReference Include="..\..\third-party\DSharpPlus\DSharpPlus.CommandsNext\DSharpPlus.CommandsNext.csproj" />
+    <ProjectReference Include="..\..\third-party\DSharpPlus\DSharpPlus.Interactivity\DSharpPlus.Interactivity.csproj" />
+    <ProjectReference Include="..\..\third-party\DSharpPlus\DSharpPlus.Lavalink\DSharpPlus.Lavalink.csproj" />
+    <ProjectReference Include="..\..\third-party\DSharpPlus\DSharpPlus.VoiceNext\DSharpPlus.VoiceNext.csproj" />
+    <ProjectReference Include="..\..\third-party\DSharpPlus\DSharpPlus\DSharpPlus.csproj" />
+    <ProjectReference Include="..\Karvis.GoogleAssistant\Karvis.GoogleAssistant.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="..\third-party\ffmpeg.exe" Link="%(Filename)%(Extension)">
+    <None Update="..\..\third-party\ffmpeg.exe" Link="%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="..\third-party\libopus.dll" Link="%(Filename)%(Extension)">
+    <None Update="..\..\third-party\libopus.dll" Link="%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="..\third-party\libsodium.dll" Link="%(Filename)%(Extension)">
+    <None Update="..\..\third-party\libsodium.dll" Link="%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="karvis.json">

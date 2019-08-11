@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
+using CoreHtmlToImage;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
@@ -20,6 +23,14 @@ using Karvis.Speech;
 using NAudio.Wave;
 using Karvis.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Google.Assistant.Embedded.V1Alpha2;
+using Google;
+using Google.Apis.Auth.OAuth2;
+using Google.Protobuf;
+using Grpc;
+using Grpc.Auth;
+using Grpc.Core;
+using Grpc.Core.Utils;
 
 namespace Karvis.Commands
 {
@@ -29,13 +40,52 @@ namespace Karvis.Commands
         private static ConcurrentDictionary<ulong, ConcurrentQueue<byte>> UserSpeech = new ConcurrentDictionary<ulong, ConcurrentQueue<byte>>();
 
         private readonly KarvisConfiguration KarvisConfiguration;
+        private readonly AssistConfig AssistantConfig;
+        private readonly EmbeddedAssistant.EmbeddedAssistantClient GoogleAssistantClient;
 
         public CommandsModule(IKarvisConfigurationService configuration)
         {
             //ServiceProvider = serviceProvider;
             KarvisConfiguration = configuration.Configuration;
+            AssistantConfig = new AssistConfig()
+            {
+                AudioInConfig = new AudioInConfig()
+                {
+                    Encoding = AudioInConfig.Types.Encoding.Linear16,
+                    SampleRateHertz = 24000
+                },
+                AudioOutConfig = new AudioOutConfig()
+                {
+                    Encoding = AudioOutConfig.Types.Encoding.Linear16,
+                    SampleRateHertz = 24000,
+                    VolumePercentage = 100
+                },
+                DeviceConfig = new DeviceConfig()
+                {
+                    DeviceId = KarvisConfiguration.GoogleAssistantConfiguration.DeviceId,
+                    DeviceModelId = KarvisConfiguration.GoogleAssistantConfiguration.DeviceModelId
+                },
+                DialogStateIn = new DialogStateIn()
+                {
+                    IsNewConversation = true,
+                    LanguageCode = "en-US"
+                },
+                DebugConfig =  new DebugConfig()
+                {
+                    ReturnDebugInfo = true
+                },
+                ScreenOutConfig = new ScreenOutConfig()
+                {
+                    ScreenMode = ScreenOutConfig.Types.ScreenMode.Playing
+                }
+            };
+            var channelCredentials = GoogleCredential
+                .FromStream(File.OpenRead(KarvisConfiguration.GoogleAssistantConfiguration.PathToCredentials))
+                .ToChannelCredentials();
+            GoogleAssistantClient =
+                new EmbeddedAssistant.EmbeddedAssistantClient(
+                    new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
         }
-
 
         [Command("hi")]
         public async Task Hi(CommandContext ctx)
@@ -155,8 +205,8 @@ namespace Karvis.Commands
             }
         }
 
-        [Command("simonsay")]
-        public async Task SimonSay(CommandContext ctx, string force = null, int @in = 22000, int @out = 44100)
+        [Command("rawsay")]
+        public async Task Raw(CommandContext ctx, string force = null)
         {
             try
             {
@@ -172,7 +222,35 @@ namespace Karvis.Commands
 
                 var buff = UserSpeech[ctx.User.Id].ToArray();
 
-                byte[] resampled = AudioConverter.Resample(buff, @in, @out, 2, 2);
+                voiceConnection.SendSpeaking();
+                await voiceConnection.GetTransmitStream().WriteAsync(buff);
+                await voiceConnection.GetTransmitStream().FlushAsync();
+                voiceConnection.SendSpeaking(false);
+            }
+            catch (Exception ex)
+            {
+                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't rawsay. \n\n``{ex.Message}``");
+            }
+        }
+
+        [Command("simonsay")]
+        public async Task SimonSay(CommandContext ctx, int @in = 22000, int @out = 44100, int inChan = 1, int outChan = 1, string force = null)
+        {
+            try
+            {
+                var discordClient = ctx.Client;
+                var voiceClient = discordClient.GetVoiceNext();
+                var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+
+                if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel && force?.ToLowerInvariant() != "force"))
+                    throw new InvalidOperationException("I'm not connected to your voice channel.");
+
+                if (!UserSpeech.ContainsKey(ctx.User.Id) || UserSpeech[ctx.User.Id].IsEmpty)
+                    throw new InvalidOperationException("You haven't said or preserved anything for me to say.");
+
+                var buff = UserSpeech[ctx.User.Id].ToArray();
+
+                byte[] resampled = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
 
                 voiceConnection.SendSpeaking();
                 await voiceConnection.GetTransmitStream().WriteAsync(resampled);
@@ -195,6 +273,189 @@ namespace Karvis.Commands
             var resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
 
             await ctx.RespondAsync("I think I heard you say: " + await new AzureSpeechModule(KarvisConfiguration, ctx.Client.DebugLogger).AudioToTextAsync(resampled));
+        }
+
+        [Command("google")]
+        public async Task TextAssist(CommandContext ctx, [RemainingText] string query)
+        {
+            AssistantConfig.AudioInConfig = null;
+            AssistantConfig.TextQuery = query;
+
+            using (var call = GoogleAssistantClient.Assist())
+            {
+                var request = new AssistRequest()
+                {
+                    AudioIn = ByteString.Empty,
+                    Config = AssistantConfig
+                };
+
+                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    $"GoogleAssistant: Sending config message: Audio IsEmpty: {request.AudioIn.IsEmpty}, Request Size: {request.CalculateSize()}",
+                    DateTime.Now);
+
+                await call.RequestStream.WriteAsync(request);
+
+                await call.RequestStream.CompleteAsync();
+
+                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    $"GoogleAssistant: Completing request and awaiting response.",
+                    DateTime.Now);
+
+                var audioOut = new List<byte>();
+
+                await call.ResponseStream.ForEachAsync(async (response) =>
+                {
+                    try
+                    {
+                        ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                            $"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Debug Info: {response.DebugInfo?.ToString()}, Size: {response.CalculateSize()}",
+                            DateTime.Now);
+
+                        if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
+                            await ctx.Channel.SendMessageAsync(response.DialogStateOut.SupplementalDisplayText);
+
+                        if (response.AudioOut?.AudioData != null)
+                        {
+                            var discordClient = ctx.Client;
+                            var voiceClient = discordClient.GetVoiceNext();
+                            var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+
+                            if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
+                                throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak, but: {response.DialogStateOut?.SupplementalDisplayText}.");
+
+                            audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
+                        }
+                    }
+                    catch (Grpc.Core.RpcException ex)
+                    {
+                        ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                            $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
+                            DateTime.Now);
+                    }
+                });
+
+                try
+                {
+                    var status = call.GetStatus();
+                    ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                        $"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.",
+                        DateTime.Now);
+                }
+                catch (InvalidOperationException ex)
+                {
+
+                }
+
+                if (audioOut.Any())
+                {
+                    var discordClient = ctx.Client;
+                    var voiceClient = discordClient.GetVoiceNext();
+                    var voiceConnection = voiceClient.GetConnection(ctx.Guild);
+
+                    if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
+                        throw new InvalidOperationException("I'm not connected to your voice channel.");
+
+                    voiceConnection.SendSpeaking();
+                    await voiceConnection.GetTransmitStream().WriteAsync(AudioConverter.Resample(audioOut.ToArray(), AssistantConfig.AudioOutConfig.SampleRateHertz, 48000, 1, 2));
+                    await voiceConnection.GetTransmitStream().FlushAsync();
+                    voiceConnection.SendSpeaking(false);
+                }
+            }
+        }
+
+        [Command("assist")]
+        public async Task Assist(CommandContext ctx, int @in = 22000, int @out = 44100, int inChan = 1, int outChan = 1, string raw = null)
+        {
+            if (!UserSpeech.ContainsKey(ctx.User.Id)) return;
+
+            var buff = UserSpeech[ctx.User.Id].ToArray();
+            
+            if (raw != "raw")
+            {
+                AssistantConfig.AudioInConfig.SampleRateHertz = @in;
+                buff = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
+            }
+            else
+            {
+                AssistantConfig.AudioInConfig.SampleRateHertz = AudioFormat.Default.SampleRate;
+            }
+            
+            using (var call = GoogleAssistantClient.Assist())
+            {
+                var configRequest = new AssistRequest()
+                {
+                    AudioIn = ByteString.Empty,
+                    Config = AssistantConfig
+                };
+
+                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    $"GoogleAssistant: Sending config message: Audio IsEmpty: {configRequest.AudioIn.IsEmpty}, Request Size: {configRequest.CalculateSize()}",
+                    DateTime.Now);
+
+                await call.RequestStream.WriteAsync(configRequest);
+
+                const int frameSize = 1600;
+                for (var i = 0; i < buff.Length; i += frameSize)
+                {
+                    var remaining = i + frameSize > buff.Length ? buff.Length % frameSize : 0;
+
+                    await call.RequestStream.WriteAsync(new AssistRequest()
+                    {
+                        AudioIn = ByteString.CopyFrom(buff, i, remaining == 0 ? frameSize : remaining)
+                    });
+                }
+
+                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    $"GoogleAssistant: Full audio sent: Buffer Length: {buff.Length}",
+                    DateTime.Now);
+
+                await call.RequestStream.CompleteAsync();
+
+                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                    $"GoogleAssistant: Completing request and awaiting response.",
+                    DateTime.Now);
+
+                await call.ResponseStream.ForEachAsync(async (response) =>
+                {
+                    try
+                    {
+                        if (response.EventType == AssistResponse.Types.EventType.EndOfUtterance)
+                        {
+                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                                $"GoogleAssistant: Utterance detected: Event Type: {response.EventType.ToString()}, {response.DialogStateOut?.SupplementalDisplayText}, {response.SpeechResults?.FirstOrDefault()?.Transcript} , Debug Info: {response.DebugInfo?.ToString()}",
+                                DateTime.Now);
+                            await ctx.Client.SendMessageAsync(ctx.Channel,
+                                $"{ctx.User.Username}, utterance detected: {response.SpeechResults?.FirstOrDefault()?.Transcript}. {response.ScreenOut?.Data}");
+                        }
+                        else
+                        {
+                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                                $"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Microphone Mode: {response.DialogStateOut?.MicrophoneMode}, Debug Info: {response.DebugInfo}",
+                                DateTime.Now);
+                        }
+                            
+                    }
+                    catch (RpcException ex)
+                    {
+                        ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                            $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
+                            DateTime.Now);
+                    }
+                });
+
+                try
+                {
+                    var status = call.GetStatus();
+                    ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                        $"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.",
+                        DateTime.Now);
+
+                }
+                catch (InvalidOperationException ex)
+                {
+
+                }
+            }
         }
 
         [Command("preserve")]
@@ -223,7 +484,6 @@ namespace Karvis.Commands
 
         public async Task OnVoiceReceived(VoiceReceiveEventArgs ea)
         {
-            var sampleRate = ea.AudioFormat.SampleRate;
             if (ea.User != null)
             {
                 var user = true;

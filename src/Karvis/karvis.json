@@ -1,0 +1,14 @@
+{
+  "DiscordConfiguration": {
+    "Token": ""
+  },
+  "AzureSpeechConfiguration": {
+    "SubscriptionKey": "",
+    "Region": ""
+  },
+  "GoogleAssistantConfiguration": {
+    "DeviceId": "",
+    "DeviceModelId": "",
+    "PathToCredentials": ""
+  }
+}

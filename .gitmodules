@@ -1,3 +1,6 @@
 [submodule "third-party/DSharpPlus"]
 	path = third-party/DSharpPlus
 	url = https://github.com/DSharpPlus/DSharpPlus.git
+[submodule "third-party/googleapis"]
+	path = third-party/googleapis
+	url = https://github.com/googleapis/googleapis.git

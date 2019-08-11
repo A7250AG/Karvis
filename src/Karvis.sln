@@ -3,7 +3,10 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.28922.388
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Karvis", "Karvis.csproj", "{520EF1C2-C63F-43FB-9977-5CE33199AED2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Karvis", "Karvis\Karvis.csproj", "{520EF1C2-C63F-43FB-9977-5CE33199AED2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{542F1E3C-6F8E-4BE9-B687-4279DADBE468} = {542F1E3C-6F8E-4BE9-B687-4279DADBE468}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DSharpPlus", "DSharpPlus", "{FBE32A5A-5E1F-4AB9-93D5-7EBEABB05570}"
 EndProject
@@ -16,6 +19,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DSharpPlus.VoiceNext", "..\third-party\DSharpPlus\DSharpPlus.VoiceNext\DSharpPlus.VoiceNext.csproj", "{4C1EB087-80F7-4DE5-BA7C-5CDAD2C7E653}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DSharpPlus.Lavalink", "..\third-party\DSharpPlus\DSharpPlus.Lavalink\DSharpPlus.Lavalink.csproj", "{37512462-28B6-4F94-94ED-F9082B21482A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Karvis.GoogleAssistant", "Karvis.GoogleAssistant\Karvis.GoogleAssistant.csproj", "{542F1E3C-6F8E-4BE9-B687-4279DADBE468}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,6 +52,10 @@ Global
 		{37512462-28B6-4F94-94ED-F9082B21482A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{37512462-28B6-4F94-94ED-F9082B21482A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{37512462-28B6-4F94-94ED-F9082B21482A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{542F1E3C-6F8E-4BE9-B687-4279DADBE468}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{542F1E3C-6F8E-4BE9-B687-4279DADBE468}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{542F1E3C-6F8E-4BE9-B687-4279DADBE468}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{542F1E3C-6F8E-4BE9-B687-4279DADBE468}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
