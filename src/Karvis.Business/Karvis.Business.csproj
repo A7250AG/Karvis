@@ -1,9 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="karvis.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Audio\" />
+    <Folder Include="Commands\" />
+    <Folder Include="Configuration\" />
+    <Folder Include="Infrastructure\" />
+    <Folder Include="Speech\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="1.60.6" />
@@ -12,6 +25,7 @@
     <PackageReference Include="DSharpPlus.Interactivity" Version="4.0.0-nightly-00624" />
     <PackageReference Include="DSharpPlus.Lavalink" Version="4.0.0-nightly-00624" />
     <PackageReference Include="DSharpPlus.VoiceNext" Version="4.0.0-nightly-00624" />
+    <PackageReference Include="Google.Apis.Oauth2.v2" Version="1.40.3.1602" />
     <PackageReference Include="Google.Protobuf" Version="3.9.1" />
     <PackageReference Include="Grpc" Version="1.22.0" />
     <PackageReference Include="Grpc.Auth" Version="1.0.1" />
@@ -31,27 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Karvis.Business\Karvis.Business.csproj" />
     <ProjectReference Include="..\Karvis.GoogleAssistant\Karvis.GoogleAssistant.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="..\..\third-party\ffmpeg.exe" Link="%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="..\..\third-party\libopus.dll" Link="%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="..\..\third-party\libsodium.dll" Link="%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="karvis.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Properties\PublishProfiles\" />
   </ItemGroup>
 
 </Project>
