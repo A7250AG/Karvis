@@ -281,7 +281,7 @@ namespace Karvis.Business.Commands
         {
             if (ctx.User?.Id == null) return;
 
-            var token = new GoogleOAuth().GetTokenForUser(ctx.User.Id);
+            var token = new GoogleOAuth(KarvisConfiguration).GetTokenForUser(ctx.User.Id);
             if (string.IsNullOrWhiteSpace(token))
             {
                 await ctx.Channel.SendMessageAsync("Sorry, you have not signed up.");
@@ -432,8 +432,8 @@ namespace Karvis.Business.Commands
                                     Scopes = new[] { "https://www.googleapis.com/auth/assistant-sdk-prototype" }
                                 });
 
-                            var tokenResponse = await flow.RefreshTokenAsync("***REMOVED***", new GoogleOAuth().GetRefreshTokenForUser(ctx.User.Id), new CancellationToken());
-                            new GoogleOAuth().StoreCredentialsForUser("***REMOVED***", tokenResponse.AccessToken, tokenResponse.RefreshToken, ctx.User.Id);
+                            var tokenResponse = await flow.RefreshTokenAsync(KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id), new CancellationToken());
+                            new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken, tokenResponse.RefreshToken, ctx.User.Id);
 
                             if (!UserEmbeddedAssistantClients.ContainsKey(ctx.User.Id))
                             {

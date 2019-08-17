@@ -1,17 +1,21 @@
 {
   "DiscordConfiguration": {
-    "Token": "token"
+    "Token": ""
   },
   "AzureSpeechConfiguration": {
-    "SubscriptionKey": "subscription-key",
-    "Region": "region"
+    "SubscriptionKey": "",
+    "Region": ""
+  },
+  "InfrastructureConfiguration": {
+    "KarvisConnectionString": ""
   },
   "GoogleAssistantConfiguration": {
-    "DeviceId": "device-id",
-    "DeviceModelId": "device-model-id",
-    "PathToCredentials": "\\path\\to\\credentials",
-    "ClientId": "client-id",
-    "ClientSecret": "client-secret",
-    "DebugToken": "debug-token"
+    "DeviceId": "",
+    "DeviceModelId": "",
+    "PathToCredentials": "",
+    "ClientId": "",
+    "ClientSecret": "",
+    "DebugToken": "",
+    "DebugUser": ""
   }
 }

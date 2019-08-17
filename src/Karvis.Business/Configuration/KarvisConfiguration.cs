@@ -9,5 +9,6 @@ namespace Karvis.Business.Configuration
         public AzureSpeechConfiguration AzureSpeechConfiguration { get; set; }
         public DiscordConfiguration DiscordConfiguration { get; set; }
         public GoogleAssistantConfiguration GoogleAssistantConfiguration { get; set; }
+        public InfrastructureConfiguration InfrastructureConfiguration { get; set; }
     }
 }

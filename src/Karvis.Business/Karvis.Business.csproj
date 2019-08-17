@@ -13,7 +13,6 @@
   <ItemGroup>
     <Folder Include="Audio\" />
     <Folder Include="Commands\" />
-    <Folder Include="Configuration\" />
     <Folder Include="Infrastructure\" />
     <Folder Include="Speech\" />
   </ItemGroup>
@@ -42,6 +41,7 @@
     <PackageReference Include="NAudio" Version="1.9.0" />
     <PackageReference Include="Npgsql" Version="4.0.8" />
     <PackageReference Include="PuppeteerSharp" Version="1.19.0" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
   </ItemGroup>
 
   <ItemGroup>

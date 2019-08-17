@@ -9,6 +9,7 @@ namespace Karvis.Business.Configuration
         public string PathToCredentials { get; set; }
         public string ClientId { get; set; }
         public string ClientSecret { get; set; }
+        public string DebugUser { get; set; }
         public string DebugToken { get; set; }
     }
 }
