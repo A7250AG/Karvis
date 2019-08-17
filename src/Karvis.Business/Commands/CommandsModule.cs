@@ -429,20 +429,30 @@ namespace Karvis.Business.Commands
                                         ClientId = KarvisConfiguration.GoogleAssistantConfiguration.ClientId,
                                         ClientSecret = KarvisConfiguration.GoogleAssistantConfiguration.ClientSecret
                                     },
-                                    Scopes = new[] { "https://www.googleapis.com/auth/assistant-sdk-prototype" }
+                                    Scopes = new[] {"https://www.googleapis.com/auth/assistant-sdk-prototype"}
                                 });
 
-                            var tokenResponse = await flow.RefreshTokenAsync(KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id), new CancellationToken());
-                            new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken, tokenResponse.RefreshToken, ctx.User.Id);
+                            var tokenResponse = await flow.RefreshTokenAsync(
+                                KarvisConfiguration.GoogleAssistantConfiguration.DebugUser,
+                                new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id),
+                                new CancellationToken());
+                            new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(
+                                KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken,
+                                tokenResponse.RefreshToken, ctx.User.Id);
 
                             if (!UserEmbeddedAssistantClients.ContainsKey(ctx.User.Id))
                             {
-                                var channelCredentials = ChannelCredentials.Create(new SslCredentials(), GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
-                                UserEmbeddedAssistantClients[ctx.User.Id] = new EmbeddedAssistant.EmbeddedAssistantClient(new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
+                                var channelCredentials = ChannelCredentials.Create(new SslCredentials(),
+                                    GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
+                                UserEmbeddedAssistantClients[ctx.User.Id] =
+                                    new EmbeddedAssistant.EmbeddedAssistantClient(
+                                        new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
                             }
 
                             await TextAssist(ctx, query);
                         }
+                        else
+                            UserGoogleAuthRetries[ctx.User.Id] = 0;
                     }
                 }
             }
