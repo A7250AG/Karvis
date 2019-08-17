@@ -41,7 +41,7 @@ namespace Karvis.Business.Infrastructure
             using (var connection = new NpgsqlConnection(KarvisConfiguration.InfrastructureConfiguration.KarvisConnectionString))
             {
                 connection.Open();
-                var existing = connection.Query<string>($"Select userId from google_oauth where discord_userid={discordUserid};").FirstOrDefault();
+                var existing = connection.Query<string>($"Select google_userid from google_oauth where discord_userid={discordUserid};").FirstOrDefault();
                 if (string.IsNullOrWhiteSpace(existing))
                 {
                     connection.Execute($"Insert into google_oauth (google_userid, token, refreshToken, discord_userid) values ('{googleUserid}', '{token}', '{refreshToken}', {discordUserid});");
