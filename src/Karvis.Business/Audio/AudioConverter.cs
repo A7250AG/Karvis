@@ -46,16 +46,9 @@ namespace Karvis.Business.Audio
             {
                 if (outputChannels == 1)
                 {
-                    DiscreteSignal signal;
+                    var buffer = buff.AsSpan().Reinterpret().ToArray().Select(b => (float) b);
 
-                    using (var stream = new MemoryStream(buff))
-                    {
-                        var waveFile = new WaveFile(stream);
-                        if (waveFile.WaveFmt.ChannelCount != 1)
-                            throw new InvalidOperationException("Input channel counts do not match.");
-
-                        signal = waveFile.Signals.FirstOrDefault();
-                    }
+                    DiscreteSignal signal = new DiscreteSignal(inputSampleRate, buffer);
 
                     return resampler.Resample(signal, outputSampleRate).Samples
                         .SelectMany(BitConverter.GetBytes)
@@ -70,20 +63,33 @@ namespace Karvis.Business.Audio
             {
                 if (outputChannels == 1)
                 {
-                    DiscreteSignal signal;
-
-                    using (var stream = new MemoryStream(buff))
+                    var mono = new byte[buff.Length/2]; // convert to mono: take 2 bytes (16bit audio), skip 2 bytes
+                    for (int b = 0, i = 0; b < buff.Length; b += 4, i+=2)
                     {
-                        var waveFile = new WaveFile(stream);
-                        if (waveFile.WaveFmt.ChannelCount != 2)
-                            throw new InvalidOperationException("Input channel counts do not match.");
-
-                        signal = waveFile[Channels.Average];
+                        mono[i] = buff[b];
+                        mono[i + 1] = buff[b + 1];
                     }
 
-                    return resampler.Resample(signal, outputSampleRate).Samples
-                        .SelectMany(BitConverter.GetBytes)
+                    var buffer = mono.AsSpan().Reinterpret().ToArray().Select(b => (int) b);
+
+                    DiscreteSignal signal = new DiscreteSignal(inputSampleRate, buffer);
+
+                    var resampled = resampler.Resample(signal, outputSampleRate);
+
+                    var max = Math.Abs(resampled.Samples.Max());
+                    var min = Math.Abs(resampled.Samples.Min());
+
+                    if (min > max)
+                        max = min;
+
+                    resampled.Attenuate(max/Int16.MaxValue);
+
+                    var output = resampled.Samples
+                        .Select(Convert.ToInt16).ToArray().AsSpan()
+                        .Reinterpret()
                         .ToArray();
+
+                    return output;
                 }
                 else if (outputChannels == 2)
                 {

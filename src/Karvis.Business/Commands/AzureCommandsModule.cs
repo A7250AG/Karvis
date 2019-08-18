@@ -157,7 +157,7 @@ namespace Karvis.Business.Commands
         }
 
         [Command("simonsay")]
-        public async Task SimonSay(CommandContext ctx, int @in = 22000, int @out = 44100, int inChan = 1, int outChan = 1, string force = null)
+        public async Task SimonSay(CommandContext ctx, int @in = 4000, int @out = 16000, int inChan = 2, int outChan = 1, string force = null)
         {
             try
             {
@@ -191,7 +191,7 @@ namespace Karvis.Business.Commands
 
             var buff = audio.SpeechFromUser[ctx.User.Id].ToArray();
 
-            var resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
+            var resampled = AudioConverter.Resample(buff, 4000, 16000, 2, 1);
 
             await ctx.RespondAsync("I think I heard you say: " + await new AzureSpeechModule(KarvisConfiguration, ctx.Client.DebugLogger).AudioToTextAsync(resampled));
         }
@@ -253,7 +253,7 @@ namespace Karvis.Business.Commands
 
                     var buff = audio.SpeechFromUser[args.User.Id].ToArray();
 
-                    byte[] resampled = AudioConverter.Resample(buff, 22000, 44100, 1, 1);
+                    byte[] resampled = AudioConverter.Resample(buff, 4000, 16000, 2, 1);
 
                     var text = await new AzureSpeechModule(KarvisConfiguration, args.Client.DebugLogger).AudioToTextAsync(resampled);
 

@@ -282,7 +282,7 @@ namespace Karvis.Business.Commands
         }
 
         [Command("assist")]
-        public async Task Assist(CommandContext ctx, int @in = 22000, int @out = 44100, int inChan = 1, int outChan = 1, string raw = null)
+        public async Task Assist(CommandContext ctx, int @in = 4000, int @out = 16000, int inChan = 2, int outChan = 1, string raw = null)
         {
             if (!ctx.Services.GetService<IProvideAudioState>().SpeechFromUser.ContainsKey(ctx.User.Id)) return;
 
@@ -291,28 +291,35 @@ namespace Karvis.Business.Commands
             AssistantConfig.AudioInConfig = new AudioInConfig()
             {
                 Encoding = AudioInConfig.Types.Encoding.Linear16,
-                SampleRateHertz = 24000
+                SampleRateHertz = 16000
             };
 
             if (raw != "raw")
             {
-                AssistantConfig.AudioInConfig.SampleRateHertz = @in;
+                AssistantConfig.AudioInConfig.SampleRateHertz = @out;
                 buff = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
             }
             else
-            {
                 AssistantConfig.AudioInConfig.SampleRateHertz = AudioFormat.Default.SampleRate;
+
+            var token = new GoogleOAuth(KarvisConfiguration).GetTokenForUser(ctx.User.Id);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                await ctx.Channel.SendMessageAsync("Sorry, you have not signed up.");
+                return;
             }
 
             if (!UserEmbeddedAssistantClients.ContainsKey(ctx.User.Id))
             {
-                var channelCredentials = ChannelCredentials.Create(new SslCredentials(), GoogleGrpcCredentials.FromAccessToken(KarvisConfiguration.GoogleAssistantConfiguration.DebugToken));
+                var channelCredentials = ChannelCredentials.Create(new SslCredentials(), GoogleGrpcCredentials.FromAccessToken(token));
                 UserEmbeddedAssistantClients[ctx.User.Id] = new EmbeddedAssistant.EmbeddedAssistantClient(new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
             }
 
             using (var call = UserEmbeddedAssistantClients[ctx.User.Id].Assist())
             {
-                var configRequest = new AssistRequest()
+                try
+                {
+                    var configRequest = new AssistRequest()
                 {
                     AudioIn = ByteString.Empty,
                     Config = AssistantConfig
@@ -383,6 +390,64 @@ namespace Karvis.Business.Commands
                 catch (InvalidOperationException ex)
                 {
 
+                }
+                }
+                catch (Grpc.Core.RpcException ex)
+                {
+                    ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
+                        $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
+                        DateTime.Now);
+
+                    if (ex.StatusCode == StatusCode.Unauthenticated)
+                    {
+                        if (!UserGoogleAuthRetries.ContainsKey(ctx.User.Id))
+                            UserGoogleAuthRetries[ctx.User.Id] = 0;
+
+                        if (UserGoogleAuthRetries[ctx.User.Id] < 3)
+                        {
+                            UserGoogleAuthRetries[ctx.User.Id]++;
+
+                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                                $"GoogleAssistant: Attempting to refresh access token.",
+                                DateTime.Now);
+
+                            using (IAuthorizationCodeFlow flow =
+                                new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+                                {
+                                    ClientSecrets = new ClientSecrets
+                                    {
+                                        ClientId = KarvisConfiguration.GoogleAssistantConfiguration.ClientId,
+                                        ClientSecret = KarvisConfiguration.GoogleAssistantConfiguration.ClientSecret
+                                    },
+                                    Scopes = new[] { "https://www.googleapis.com/auth/assistant-sdk-prototype" }
+                                }))
+                            {
+                                var tokenResponse = await flow.RefreshTokenAsync(
+                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser,
+                                    new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id),
+                                    new CancellationToken());
+
+                                new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(
+                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken,
+                                    tokenResponse.RefreshToken, ctx.User.Id);
+
+                                var channelCredentials = ChannelCredentials.Create(new SslCredentials(),
+                                    GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
+
+                                UserEmbeddedAssistantClients[ctx.User.Id] =
+                                    new EmbeddedAssistant.EmbeddedAssistantClient(
+                                        new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
+
+                                await Assist(ctx, @in, @out, inChan, outChan, raw);
+                            }
+                        }
+                        else
+                            UserGoogleAuthRetries[ctx.User.Id] = 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
                 }
             }
         }
