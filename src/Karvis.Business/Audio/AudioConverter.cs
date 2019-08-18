@@ -2,13 +2,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
+using NWaves.Audio;
+using NWaves.Operations;
+using NWaves.Signals;
+using WaveFormat = NAudio.Wave.WaveFormat;
 
 namespace Karvis.Business.Audio
 {
     public static class AudioConverter
     {
-        public static byte[] Resample(byte[] buff, int inputSampleRate, int outputSampleRate, int inputChannels,  int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
+        public static byte[] ResampleWindowsOnly(byte[] buff, int inputSampleRate, int outputSampleRate, int inputChannels,  int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
         {
             byte[] resampled;
             // NAudio resampling from Azure Speech default to Opus default 
@@ -31,6 +36,62 @@ namespace Karvis.Business.Audio
             }
 
             return resampled;
+        }
+
+        public static byte[] Resample(byte[] buff, int inputSampleRate, int outputSampleRate, int inputChannels, int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
+        {
+            var resampler = new Resampler();
+
+            if (inputChannels == 1)
+            {
+                if (outputChannels == 1)
+                {
+                    DiscreteSignal signal;
+
+                    using (var stream = new MemoryStream(buff))
+                    {
+                        var waveFile = new WaveFile(stream);
+                        if (waveFile.WaveFmt.ChannelCount != 1)
+                            throw new InvalidOperationException("Input channel counts do not match.");
+
+                        signal = waveFile.Signals.FirstOrDefault();
+                    }
+
+                    return resampler.Resample(signal, outputSampleRate).Samples
+                        .SelectMany(BitConverter.GetBytes)
+                        .ToArray();
+                }
+                else if (outputChannels == 2)
+                {
+                    throw new NotImplementedException();
+                }
+            }
+            else if (inputChannels == 2)
+            {
+                if (outputChannels == 1)
+                {
+                    DiscreteSignal signal;
+
+                    using (var stream = new MemoryStream(buff))
+                    {
+                        var waveFile = new WaveFile(stream);
+                        if (waveFile.WaveFmt.ChannelCount != 2)
+                            throw new InvalidOperationException("Input channel counts do not match.");
+
+                        signal = waveFile[Channels.Average];
+                    }
+
+                    return resampler.Resample(signal, outputSampleRate).Samples
+                        .SelectMany(BitConverter.GetBytes)
+                        .ToArray();
+                }
+                else if (outputChannels == 2)
+                {
+                    throw new NotImplementedException();
+                }
+            }
+
+            return buff;
         }
     }
 }
