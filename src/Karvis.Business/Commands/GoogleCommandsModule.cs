@@ -173,7 +173,6 @@ namespace Karvis.Business.Commands
                             var voiceConnection = await ctx.EnsureVoiceConnection();
 
                             if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
-                                // TODO: this exception is getting swallowed
                                 throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak, but: {response.DialogStateOut?.SupplementalDisplayText}.");
 
                             audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
@@ -257,6 +256,10 @@ namespace Karvis.Business.Commands
                         else
                             UserGoogleAuthRetries[ctx.User.Id] = 0;
                     }
+                }
+                catch (Exception ex)
+                {
+                    await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
                 }
             }
         }
