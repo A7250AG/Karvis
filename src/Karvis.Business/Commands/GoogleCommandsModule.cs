@@ -148,32 +148,44 @@ namespace Karvis.Business.Commands
 
                         if (response.ScreenOut != null)
                         {
-                            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-                            using (var browser = await Puppeteer.LaunchAsync(new LaunchOptions
-                            {
-                                DefaultViewport = new ViewPortOptions() { IsLandscape = true, Width = 1280, Height = 720 },
-                                Headless = true
-                            }))
-                            using (var page = await browser.NewPageAsync())
-                            {
-                                await page.SetContentAsync(response.ScreenOut.Data.ToStringUtf8());
-                                var result = await page.GetContentAsync();
-                                await page.WaitForTimeoutAsync(500);
-                                var data = await page.ScreenshotDataAsync();
+                            _ = Task.Run(async () =>
+                              {
+                                  ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                                      $"GoogleAssistant: Received screen data.",
+                                      DateTime.Now);
 
-                                using (var ms = new MemoryStream(data))
-                                {
-                                    await ctx.RespondWithFileAsync($"{Guid.NewGuid()}.jpg", ms);
-                                }
-                            }
+                                  await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+                                  using (var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+                                  {
+                                      DefaultViewport = new ViewPortOptions()
+                                      { IsLandscape = true, Width = 1280, Height = 720 },
+                                      Headless = true
+                                  }))
+                                  using (var page = await browser.NewPageAsync())
+                                  {
+                                      await page.SetContentAsync(response.ScreenOut.Data.ToStringUtf8());
+                                      var result = await page.GetContentAsync();
+                                      await page.WaitForTimeoutAsync(500);
+                                      var data = await page.ScreenshotDataAsync();
+
+                                      using (var ms = new MemoryStream(data))
+                                      {
+                                          await ctx.RespondWithFileAsync($"{Guid.NewGuid()}.jpg", ms);
+                                      }
+                                  }
+                              });
                         }
 
                         if (response.AudioOut?.AudioData != null)
                         {
-                            var voiceConnection = await ctx.EnsureVoiceConnection();
+                            if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
+                            {
+                                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
+                                    $"GoogleAssistant: Received supplemental text.",
+                                    DateTime.Now);
 
-                            if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
-                                throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak, but: {response.DialogStateOut?.SupplementalDisplayText}.");
+                                await ctx.RespondAsync(response.DialogStateOut?.SupplementalDisplayText);
+                            }
 
                             audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
                         }
@@ -193,7 +205,11 @@ namespace Karvis.Business.Commands
 
                     if (audioOut.Any())
                     {
-                        var voiceConnection = ctx.Client.GetVoiceNext().GetConnection(ctx.Guild);
+                        var voiceConnection = await ctx.EnsureVoiceConnection();
+
+                        if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
+                            throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak.");
+
 
                         var audio = AudioConverter.Resample(audioOut.ToArray(),
                             AssistantConfig.AudioOutConfig.SampleRateHertz, 48000, 1, 2);
