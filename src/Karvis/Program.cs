@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Karvis.Business.Audio;
 using Karvis.Business.Configuration;
 
 namespace Karvis
@@ -38,6 +39,7 @@ namespace Karvis
             // Create service collection and configure our services
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IKarvisConfigurationService>(new KarvisConfigurationService())
+                .AddSingleton<IProvideAudioState>(new AudioStateProvider())
                 .BuildServiceProvider();
 
             karvisConfiguration = serviceProvider.GetService<IKarvisConfigurationService>().Configuration;
@@ -55,7 +57,7 @@ namespace Karvis
             audioConfig.AudioFormat = new AudioFormat(48000, 2, VoiceApplication.Music);
             audioConfig.EnableIncoming = true;
             voice = discord.UseVoiceNext(audioConfig);
-        
+
             discord.MessageCreated += async e =>
             {
                 if (e.Message.Content.ToLower().StartsWith("ping"))
@@ -70,8 +72,12 @@ namespace Karvis
             });
 
             commands.RegisterCommands<CommandsModule>();
+            commands.RegisterCommands<LavalinkCommandsModule>();
+            commands.RegisterCommands<AzureCommandsModule>();
+            commands.RegisterCommands<GoogleCommandsModule>();
 
-            interactivity = discord.UseInteractivity(new InteractivityConfiguration {
+            interactivity = discord.UseInteractivity(new InteractivityConfiguration
+            {
             });
 
             lavalink = discord.UseLavalink();

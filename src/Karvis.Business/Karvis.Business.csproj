@@ -11,8 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Audio\" />
-    <Folder Include="Commands\" />
     <Folder Include="Infrastructure\" />
     <Folder Include="Speech\" />
   </ItemGroup>
