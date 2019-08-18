@@ -1,5 +1,4 @@
-﻿using NAudio.Wave;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,97 +6,92 @@ using System.Text;
 using NWaves.Audio;
 using NWaves.Operations;
 using NWaves.Signals;
-using WaveFormat = NAudio.Wave.WaveFormat;
 
 namespace Karvis.Business.Audio
 {
     public static class AudioConverter
     {
-        public static byte[] ResampleWindowsOnly(byte[] buff, int inputSampleRate, int outputSampleRate, int inputChannels,  int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
+        public static byte[] Resample(byte[] input, int inputSampleRate, int outputSampleRate, int inputChannels, int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
         {
-            byte[] resampled;
-            // NAudio resampling from Azure Speech default to Opus default 
-            using (var output = new MemoryStream())
-            using (var ms = new MemoryStream(buff))
-            using (var rs = new RawSourceWaveStream(ms, new WaveFormat(inputSampleRate, inputBitDepth, inputChannels)))
-            using (var resampler = new MediaFoundationResampler(rs, new WaveFormat(outputSampleRate, outputBitDepth, outputChannels)))
-            {
-                // thanks https://csharp.hotexamples.com/examples/NAudio.Wave/MediaFoundationResampler/Read/php-mediafoundationresampler-read-method-examples.html#0xe8c3188aa82ab5c60c681c14b7336b52f1b3546fd75d133baef6572074b6028c-125,,155,
-                byte[] bytes = new byte[rs.WaveFormat.AverageBytesPerSecond * 4];
-                while (true)
-                {
-                    int bytesRead = resampler.Read(bytes, 0, bytes.Length);
-                    if (bytesRead == 0)
-                        break;
-                    output.Write(bytes, 0, bytesRead);
-                }
+            if ((inputChannels != 1 && inputChannels != 2) || (outputChannels != 1 && outputChannels != 2))
+                return input;
 
-                resampled = output.GetBuffer();
-            }
-
-            return resampled;
-        }
-
-        public static byte[] Resample(byte[] buff, int inputSampleRate, int outputSampleRate, int inputChannels, int outputChannels, int inputBitDepth = 16, int outputBitDepth = 16)
-        {
-            var resampler = new Resampler();
+            var buff = ResampleInternal(input, inputSampleRate, outputSampleRate);
 
             if (inputChannels == 1)
             {
-                if (outputChannels == 1)
+                if (outputChannels == 2)
                 {
-                    var buffer = buff.AsSpan().Reinterpret().ToArray().Select(b => (float) b);
-
-                    DiscreteSignal signal = new DiscreteSignal(inputSampleRate, buffer);
-
-                    return resampler.Resample(signal, outputSampleRate).Samples
-                        .SelectMany(BitConverter.GetBytes)
-                        .ToArray();
-                }
-                else if (outputChannels == 2)
-                {
-                    throw new NotImplementedException();
+                    buff = MonoToStereo(buff);
                 }
             }
             else if (inputChannels == 2)
             {
                 if (outputChannels == 1)
-                {
-                    var mono = new byte[buff.Length/2]; // convert to mono: take 2 bytes (16bit audio), skip 2 bytes
-                    for (int b = 0, i = 0; b < buff.Length; b += 4, i+=2)
-                    {
-                        mono[i] = buff[b];
-                        mono[i + 1] = buff[b + 1];
-                    }
-
-                    var buffer = mono.AsSpan().Reinterpret().ToArray().Select(b => (int) b);
-
-                    DiscreteSignal signal = new DiscreteSignal(inputSampleRate, buffer);
-
-                    var resampled = resampler.Resample(signal, outputSampleRate);
-
-                    var max = Math.Abs(resampled.Samples.Max());
-                    var min = Math.Abs(resampled.Samples.Min());
-
-                    if (min > max)
-                        max = min;
-
-                    resampled.Attenuate(max/Int16.MaxValue);
-
-                    var output = resampled.Samples
-                        .Select(Convert.ToInt16).ToArray().AsSpan()
-                        .Reinterpret()
-                        .ToArray();
-
-                    return output;
-                }
-                else if (outputChannels == 2)
-                {
-                    throw new NotImplementedException();
-                }
+                    buff = StereoToMono(buff);
             }
 
             return buff;
+        }
+
+        private static byte[] MonoToStereo(byte[] input)
+        {
+            // thanks https://www.codeproject.com/Articles/501521/How-to-convert-between-most-audio-formats-in-NET
+            byte[] output = new byte[input.Length * 2];
+            int outputIndex = 0;
+            for (int n = 0; n < input.Length; n += 2)
+            {
+                // copy in the first 16 bit sample
+                output[outputIndex++] = input[n];
+                output[outputIndex++] = input[n + 1];
+                // now copy it in again
+                output[outputIndex++] = input[n];
+                output[outputIndex++] = input[n + 1];
+            }
+            return output;
+        }
+
+        private static byte[] StereoToMono(byte[] input)
+        {
+            // thanks https://www.codeproject.com/Articles/501521/How-to-convert-between-most-audio-formats-in-NET
+            byte[] output = new byte[input.Length / 2];
+            int outputIndex = 0;
+            for (int n = 0; n < input.Length; n += 4)
+            {
+                int leftChannel = BitConverter.ToInt16(input, n);
+                int rightChannel = BitConverter.ToInt16(input, n + 2);
+                int mixed = (leftChannel + rightChannel) / 2;
+                byte[] outSample = BitConverter.GetBytes((short)mixed);
+
+                // copy in the first 16 bit sample
+                output[outputIndex++] = outSample[0];
+                output[outputIndex++] = outSample[1];
+            }
+            return output;
+        }
+
+        private static byte[] ResampleInternal(byte[] buff, int inputSampleRate, int outputSampleRate)
+        {
+            var floated = buff.AsSpan().Reinterpret().ToArray().Select(b => (float)b);
+
+            var original = new DiscreteSignal(inputSampleRate, floated);
+
+            var resampled = new Resampler().Resample(original, outputSampleRate);
+
+            var max = Math.Abs(resampled.Samples.Max());
+            var min = Math.Abs(resampled.Samples.Min());
+
+            if (min > max)
+                max = min;
+
+            resampled.Attenuate(max / Int16.MaxValue);
+
+            var defloated = resampled.Samples
+                .Select(Convert.ToInt16).ToArray().AsSpan()
+                .Reinterpret()
+                .ToArray();
+
+            return defloated;
         }
     }
 }

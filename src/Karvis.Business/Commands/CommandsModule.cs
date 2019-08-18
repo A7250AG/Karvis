@@ -20,7 +20,6 @@ using DSharpPlus.VoiceNext;
 using DSharpPlus.VoiceNext.EventArgs;
 using Karvis.Business.Audio;
 using Karvis.Business.Speech;
-using NAudio.Wave;
 using Karvis.Business.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Google.Assistant.Embedded.V1Alpha2;

@@ -20,7 +20,6 @@ using DSharpPlus.VoiceNext;
 using DSharpPlus.VoiceNext.EventArgs;
 using Karvis.Business.Audio;
 using Karvis.Business.Speech;
-using NAudio.Wave;
 using Karvis.Business.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Google.Assistant.Embedded.V1Alpha2;
@@ -56,12 +55,12 @@ namespace Karvis.Business.Commands
                 AudioInConfig = new AudioInConfig()
                 {
                     Encoding = AudioInConfig.Types.Encoding.Linear16,
-                    SampleRateHertz = 24000
+                    SampleRateHertz = 16000
                 },
                 AudioOutConfig = new AudioOutConfig()
                 {
                     Encoding = AudioOutConfig.Types.Encoding.Linear16,
-                    SampleRateHertz = 24000,
+                    SampleRateHertz = 16000,
                     VolumePercentage = 100
                 },
                 DeviceConfig = new DeviceConfig()
@@ -211,9 +210,9 @@ namespace Karvis.Business.Commands
                         if (voiceConnection == null || (voiceConnection.Channel != ctx.Member?.VoiceState?.Channel))
                             throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak.");
 
-
-                        var audio = AudioConverter.Resample(audioOut.ToArray(),
-                            AssistantConfig.AudioOutConfig.SampleRateHertz, 48000, 1, 2);
+                        var audio = AudioConverter.Resample(audioOut.ToArray(), 
+                            8000, 48000, 
+                            1, 1);
 
                         voiceConnection.SendSpeaking();
                         await voiceConnection.GetTransmitStream().WriteAsync(audio, 0, audio.Length);
@@ -296,7 +295,7 @@ namespace Karvis.Business.Commands
 
             if (raw != "raw")
             {
-                AssistantConfig.AudioInConfig.SampleRateHertz = @out;
+                //AssistantConfig.AudioInConfig.SampleRateHertz = @out;
                 buff = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
             }
             else
