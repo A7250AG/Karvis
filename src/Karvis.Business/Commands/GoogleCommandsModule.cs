@@ -159,7 +159,8 @@ namespace Karvis.Business.Commands
                                   {
                                       DefaultViewport = new ViewPortOptions()
                                       { IsLandscape = true, Width = 1280, Height = 720 },
-                                      Headless = true
+                                      Headless = true,
+                                      Args = new []{ "--no-sandbox"}
                                   }))
                                   using (var page = await browser.NewPageAsync())
                                   {
