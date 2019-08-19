@@ -16,7 +16,7 @@ namespace Karvis
 
         #region Channel IDs
 
-        public static ulong Channel_General_Text = 606807429942083598;
+        public static ulong Channel_General_Text = 612838091136172032;
         public static ulong Channel_General_Voice = 606807429942083602;
 
         #endregion
