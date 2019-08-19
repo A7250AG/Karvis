@@ -173,7 +173,7 @@ namespace Karvis.Business.Commands
                             throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak.");
 
                         var audio = AudioConverter.Resample(audioOut.ToArray(), 
-                            8000, 48000, 
+                            16000, 48000, 
                             1, 1);
 
                         voiceConnection.SendSpeaking();
@@ -290,7 +290,7 @@ namespace Karvis.Business.Commands
                             throw new InvalidOperationException($"I'm not connected to your voice channel, so I can't speak.");
 
                         var audio = AudioConverter.Resample(audioOut.ToArray(),
-                            8000, 48000,
+                            16000, 48000,
                             1, 1);
 
                         voiceConnection.SendSpeaking();
