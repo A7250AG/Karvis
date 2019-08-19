@@ -174,7 +174,7 @@ namespace Karvis.Business.Commands
 
                         var audio = AudioConverter.Resample(audioOut.ToArray(), 
                             16000, 48000, 
-                            1, 1);
+                            1, 2);
 
                         voiceConnection.SendSpeaking();
                         voiceConnection.GetTransmitStream().Write(audio, 0, audio.Length);
@@ -226,22 +226,7 @@ namespace Karvis.Business.Commands
             };
 
             if (raw != "raw")
-            {
-                using (var stream = new FileStream($"google-original-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                {
-                    await stream.WriteAsync(buff, 0, buff.Length);
-                    stream.Flush(true);
-                }
-
-                //AssistantConfig.AudioInConfig.SampleRateHertz = @out;
                 buff = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
-
-                using (var stream = new FileStream($"google-resampled-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                {
-                    await stream.WriteAsync(buff, 0, buff.Length);
-                    stream.Flush(true);
-                }
-            }
             else
                 AssistantConfig.AudioInConfig.SampleRateHertz = AudioFormat.Default.SampleRate;
 
@@ -291,7 +276,7 @@ namespace Karvis.Business.Commands
 
                         var audio = AudioConverter.Resample(audioOut.ToArray(),
                             16000, 48000,
-                            1, 1);
+                            1, 2);
 
                         voiceConnection.SendSpeaking();
                         voiceConnection.GetTransmitStream().Write(audio, 0, audio.Length);
