@@ -1,40 +1,23 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
-using DSharpPlus.Entities;
-using DSharpPlus.EventArgs;
-using DSharpPlus.Interactivity;
-using DSharpPlus.Lavalink;
-using DSharpPlus.Lavalink.EventArgs;
-using DSharpPlus.Net;
 using DSharpPlus.VoiceNext;
-using DSharpPlus.VoiceNext.EventArgs;
 using Karvis.Business.Audio;
-using Karvis.Business.Speech;
 using Karvis.Business.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Google.Assistant.Embedded.V1Alpha2;
-using Google;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
-using Google.Apis.Auth.OAuth2.Responses;
 using Google.Protobuf;
-using Grpc;
 using Grpc.Auth;
 using Grpc.Core;
 using Grpc.Core.Utils;
 using Karvis.Business.Infrastructure;
-using Microsoft.Win32.SafeHandles;
-using PuppeteerSharp;
 
 namespace Karvis.Business.Commands
 {
@@ -52,11 +35,6 @@ namespace Karvis.Business.Commands
 
             AssistantConfig = new AssistConfig()
             {
-                AudioInConfig = new AudioInConfig()
-                {
-                    Encoding = AudioInConfig.Types.Encoding.Linear16,
-                    SampleRateHertz = 16000
-                },
                 AudioOutConfig = new AudioOutConfig()
                 {
                     Encoding = AudioOutConfig.Types.Encoding.Linear16,
@@ -92,7 +70,7 @@ namespace Karvis.Business.Commands
             var token = new GoogleOAuth(KarvisConfiguration).GetTokenForUser(ctx.User.Id);
             if (string.IsNullOrWhiteSpace(token))
             {
-                await ctx.Channel.SendMessageAsync("Sorry, you have not signed up.");
+                await ctx.RespondAsync("Sorry, you have not signed up.");
                 return;
             }
 
@@ -102,101 +80,35 @@ namespace Karvis.Business.Commands
                 UserEmbeddedAssistantClients[ctx.User.Id] = new EmbeddedAssistant.EmbeddedAssistantClient(new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
             }
 
-            // Working
-            //if (!UserEmbeddedAssistantClients.ContainsKey(ctx.User.Id))
-            //{
-            //    var channelCredentials = ChannelCredentials.Create(new SslCredentials(), GoogleGrpcCredentials.FromAccessToken(token));
-            //    UserEmbeddedAssistantClients[ctx.User.Id] = new EmbeddedAssistant.EmbeddedAssistantClient(new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
-            //}
-
-            AssistantConfig.AudioInConfig = null;
-            AssistantConfig.TextQuery = query;
-
             using (var call = UserEmbeddedAssistantClients[ctx.User.Id].Assist())
             {
                 try
                 {
+                    AssistantConfig.AudioInConfig = null;
+                    AssistantConfig.TextQuery = query;
+
                     var request = new AssistRequest()
                     {
                         AudioIn = ByteString.Empty,
                         Config = AssistantConfig
                     };
 
-                    ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                        $"GoogleAssistant: Sending config message: Audio IsEmpty: {request.AudioIn.IsEmpty}, Request Size: {request.CalculateSize()}",
-                        DateTime.Now);
+                    ctx.LogInfo($"GoogleAssistant: Sending config message: Audio IsEmpty: {request.AudioIn.IsEmpty}, Request Size: {request.CalculateSize()}");
 
                     await call.RequestStream.WriteAsync(request);
 
                     await call.RequestStream.CompleteAsync();
 
-                    ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                        $"GoogleAssistant: Completing request and awaiting response.",
-                        DateTime.Now);
+                    ctx.LogInfo($"GoogleAssistant: Completing request and awaiting response.");
 
                     var audioOut = new List<byte>();
 
-                    await call.ResponseStream.ForEachAsync(async (response) =>
-                    {
-                        ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                            $"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Debug Info: {response.DebugInfo?.ToString()}, Size: {response.CalculateSize()}",
-                            DateTime.Now);
-
-                        if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
-                            await ctx.Channel.SendMessageAsync(response.DialogStateOut.SupplementalDisplayText);
-
-                        if (response.ScreenOut != null)
-                        {
-                            _ = Task.Run(async () =>
-                              {
-                                  ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                      $"GoogleAssistant: Received screen data.",
-                                      DateTime.Now);
-
-                                  await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
-                                  using (var browser = await Puppeteer.LaunchAsync(new LaunchOptions
-                                  {
-                                      DefaultViewport = new ViewPortOptions()
-                                      { IsLandscape = true, Width = 1280, Height = 720 },
-                                      Headless = true,
-                                      Args = new []{ "--no-sandbox"}
-                                  }))
-                                  using (var page = await browser.NewPageAsync())
-                                  {
-                                      await page.SetContentAsync(response.ScreenOut.Data.ToStringUtf8());
-                                      var result = await page.GetContentAsync();
-                                      await page.WaitForTimeoutAsync(500);
-                                      var data = await page.ScreenshotDataAsync();
-
-                                      using (var ms = new MemoryStream(data))
-                                      {
-                                          await ctx.RespondWithFileAsync($"{Guid.NewGuid()}.jpg", ms);
-                                      }
-                                  }
-                              });
-                        }
-
-                        if (response.AudioOut?.AudioData != null)
-                        {
-                            if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
-                            {
-                                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                    $"GoogleAssistant: Received supplemental text.",
-                                    DateTime.Now);
-
-                                await ctx.RespondAsync(response.DialogStateOut?.SupplementalDisplayText);
-                            }
-
-                            audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
-                        }
-                    });
+                    await call.ResponseStream.ForEachAsync((response) => ProcessTextAssistResponse(response, ctx, ref audioOut));
 
                     try
                     {
                         var status = call.GetStatus();
-                        ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                            $"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.",
-                            DateTime.Now);
+                        ctx.LogInfo($"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.");
                     }
                     catch (InvalidOperationException ex)
                     {
@@ -220,11 +132,9 @@ namespace Karvis.Business.Commands
                         voiceConnection.SendSpeaking(false);
                     }
                 }
-                catch (Grpc.Core.RpcException ex)
+                catch (RpcException ex)
                 {
-                    ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
-                        $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
-                        DateTime.Now);
+                    ctx.LogError($"GoogleAssistant: Exception: {ex.StatusCode}, Detail: {ex.Status.Detail}, Message: {ex.Message}.");
 
                     if (ex.StatusCode == StatusCode.Unauthenticated)
                     {
@@ -235,47 +145,19 @@ namespace Karvis.Business.Commands
                         {
                             UserGoogleAuthRetries[ctx.User.Id]++;
 
-                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                $"GoogleAssistant: Attempting to refresh access token.",
-                                DateTime.Now);
+                            await ReAuth(ctx);
 
-                            using (IAuthorizationCodeFlow flow =
-                                new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-                                {
-                                    ClientSecrets = new ClientSecrets
-                                    {
-                                        ClientId = KarvisConfiguration.GoogleAssistantConfiguration.ClientId,
-                                        ClientSecret = KarvisConfiguration.GoogleAssistantConfiguration.ClientSecret
-                                    },
-                                    Scopes = new[] {"https://www.googleapis.com/auth/assistant-sdk-prototype"}
-                                }))
-                            {
-                                var tokenResponse = await flow.RefreshTokenAsync(
-                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser,
-                                    new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id),
-                                    new CancellationToken());
-
-                                new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(
-                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken,
-                                    tokenResponse.RefreshToken, ctx.User.Id);
-
-                                var channelCredentials = ChannelCredentials.Create(new SslCredentials(),
-                                    GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
-
-                                UserEmbeddedAssistantClients[ctx.User.Id] =
-                                    new EmbeddedAssistant.EmbeddedAssistantClient(
-                                        new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
-
-                                await TextAssist(ctx, query);
-                            }
+                            await TextAssist(ctx, query);
                         }
                         else
                             UserGoogleAuthRetries[ctx.User.Id] = 0;
                     }
+
+                    ctx.LogError($"GoogleAssistant: Exception: {ex.StatusCode}, Detail: {ex.Status.Detail}, Message: {ex.Message}.");
                 }
                 catch (Exception ex)
                 {
-                    await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
+                    await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
                 }
             }
         }
@@ -304,7 +186,7 @@ namespace Karvis.Business.Commands
             var token = new GoogleOAuth(KarvisConfiguration).GetTokenForUser(ctx.User.Id);
             if (string.IsNullOrWhiteSpace(token))
             {
-                await ctx.Channel.SendMessageAsync("Sorry, you have not signed up.");
+                await ctx.RespondAsync("Sorry, you have not signed up.");
                 return;
             }
 
@@ -319,83 +201,37 @@ namespace Karvis.Business.Commands
                 try
                 {
                     var configRequest = new AssistRequest()
-                {
-                    AudioIn = ByteString.Empty,
-                    Config = AssistantConfig
-                };
-
-                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                    $"GoogleAssistant: Sending config message: Audio IsEmpty: {configRequest.AudioIn.IsEmpty}, Request Size: {configRequest.CalculateSize()}",
-                    DateTime.Now);
-
-                await call.RequestStream.WriteAsync(configRequest);
-
-                const int frameSize = 1600;
-                for (var i = 0; i < buff.Length; i += frameSize)
-                {
-                    var remaining = i + frameSize > buff.Length ? buff.Length % frameSize : 0;
-
-                    await call.RequestStream.WriteAsync(new AssistRequest()
                     {
-                        AudioIn = ByteString.CopyFrom(buff, i, remaining == 0 ? frameSize : remaining)
-                    });
-                }
+                        AudioIn = ByteString.Empty,
+                        Config = AssistantConfig
+                    };
 
-                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                    $"GoogleAssistant: Full audio sent: Buffer Length: {buff.Length}",
-                    DateTime.Now);
+                    ctx.LogInfo($"GoogleAssistant: Sending config message: Audio IsEmpty: {configRequest.AudioIn.IsEmpty}, Request Size: {configRequest.CalculateSize()}");
 
-                await call.RequestStream.CompleteAsync();
+                    await call.RequestStream.WriteAsync(configRequest);
 
-                ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                    $"GoogleAssistant: Completing request and awaiting response.",
-                    DateTime.Now);
+                    await SendAudioInChunks(call, ctx, buff);
 
-                await call.ResponseStream.ForEachAsync(async (response) =>
-                {
+                    await call.RequestStream.CompleteAsync();
+
+                    ctx.LogInfo($"GoogleAssistant: Completing request and awaiting response.");
+
+                    await call.ResponseStream.ForEachAsync((response) => ProcessVoiceAssistResponse(response, ctx));
+
                     try
                     {
-                        if (response.EventType == AssistResponse.Types.EventType.EndOfUtterance)
-                        {
-                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                $"GoogleAssistant: Utterance detected: Event Type: {response.EventType.ToString()}, {response.DialogStateOut?.SupplementalDisplayText}, {response.SpeechResults?.FirstOrDefault()?.Transcript} , Debug Info: {response.DebugInfo?.ToString()}",
-                                DateTime.Now);
-                            await ctx.Client.SendMessageAsync(ctx.Channel,
-                                $"{ctx.User.Username}, utterance detected: {response.SpeechResults?.FirstOrDefault()?.Transcript}. {response.ScreenOut?.Data}");
-                        }
-                        else
-                        {
-                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                $"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Microphone Mode: {response.DialogStateOut?.MicrophoneMode}, Debug Info: {response.DebugInfo}",
-                                DateTime.Now);
-                        }
+                        var status = call.GetStatus();
 
+                        ctx.LogInfo($"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.");
                     }
-                    catch (RpcException ex)
+                    catch (InvalidOperationException ex)
                     {
-                        ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
-                            $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
-                            DateTime.Now);
+
                     }
-                });
-
-                try
-                {
-                    var status = call.GetStatus();
-                    ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                        $"GoogleAssistant: Final Status: {status.StatusCode}, Detail: {status.Detail}.",
-                        DateTime.Now);
                 }
-                catch (InvalidOperationException ex)
+                catch (RpcException ex)
                 {
-
-                }
-                }
-                catch (Grpc.Core.RpcException ex)
-                {
-                    ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName,
-                        $"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.",
-                        DateTime.Now);
+                    ctx.LogError($"GoogleAssistant: Exception: {ex.StatusCode}, {ex.Status.Detail}, {ex.Message}.");
 
                     if (ex.StatusCode == StatusCode.Unauthenticated)
                     {
@@ -406,39 +242,9 @@ namespace Karvis.Business.Commands
                         {
                             UserGoogleAuthRetries[ctx.User.Id]++;
 
-                            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName,
-                                $"GoogleAssistant: Attempting to refresh access token.",
-                                DateTime.Now);
+                            await ReAuth(ctx);
 
-                            using (IAuthorizationCodeFlow flow =
-                                new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-                                {
-                                    ClientSecrets = new ClientSecrets
-                                    {
-                                        ClientId = KarvisConfiguration.GoogleAssistantConfiguration.ClientId,
-                                        ClientSecret = KarvisConfiguration.GoogleAssistantConfiguration.ClientSecret
-                                    },
-                                    Scopes = new[] { "https://www.googleapis.com/auth/assistant-sdk-prototype" }
-                                }))
-                            {
-                                var tokenResponse = await flow.RefreshTokenAsync(
-                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser,
-                                    new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id),
-                                    new CancellationToken());
-
-                                new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(
-                                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken,
-                                    tokenResponse.RefreshToken, ctx.User.Id);
-
-                                var channelCredentials = ChannelCredentials.Create(new SslCredentials(),
-                                    GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
-
-                                UserEmbeddedAssistantClients[ctx.User.Id] =
-                                    new EmbeddedAssistant.EmbeddedAssistantClient(
-                                        new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
-
-                                await Assist(ctx, @in, @out, inChan, outChan, raw);
-                            }
+                            await Assist(ctx, @in, @out, inChan, outChan, raw);
                         }
                         else
                             UserGoogleAuthRetries[ctx.User.Id] = 0;
@@ -446,8 +252,109 @@ namespace Karvis.Business.Commands
                 }
                 catch (Exception ex)
                 {
-                    await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
+                    await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't google. \n\n``{ex.Message}``");
                 }
+            }
+        }
+
+        private static Task ProcessTextAssistResponse(AssistResponse response, CommandContext ctx, ref List<byte> audioOut)
+        {
+            ctx.LogInfo(
+                $"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Debug Info: {response.DebugInfo}, Size: {response.CalculateSize()}");
+
+            var tasks = new List<Task>();
+
+            if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
+            {
+                ctx.LogInfo($"GoogleAssistant: Received supplemental text.");
+
+                tasks.Add(Task.Run(() => ctx.RespondAsync(response.DialogStateOut?.SupplementalDisplayText)));
+            }
+
+            if (response.ScreenOut != null)
+            {
+                ctx.LogInfo($"GoogleAssistant: Received screen data.");
+
+                tasks.Add(Task.Run(() => ctx.RespondWithHtmlAsImage(response.ScreenOut.Data.ToStringUtf8())));
+            }
+
+            if (response.AudioOut?.AudioData != null)
+            {
+                ctx.LogInfo($"GoogleAssistant: Received audio data.");
+
+                audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
+            }
+
+            return Task.WhenAll(tasks);
+        }
+
+        private static async Task ProcessVoiceAssistResponse(AssistResponse response, CommandContext ctx)
+        {
+            try
+            {
+                if (response.EventType == AssistResponse.Types.EventType.EndOfUtterance)
+                {
+                    ctx.LogInfo($"GoogleAssistant: Utterance detected: Event Type: {response.EventType.ToString()}, Supplemental Text: {response.DialogStateOut?.SupplementalDisplayText}, Transcript: {response.SpeechResults?.FirstOrDefault()?.Transcript} , Debug Info: {response.DebugInfo?.ToString()}");
+
+                    await ctx.Client.SendMessageAsync(ctx.Channel, $"{ctx.User.Username}, utterance detected: {response.SpeechResults?.FirstOrDefault()?.Transcript}, Screen Out: {response.ScreenOut?.Data}");
+                }
+                else
+                {
+                    ctx.LogInfo($"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Microphone Mode: {response.DialogStateOut?.MicrophoneMode}, Debug Info: {response.DebugInfo}");
+                }
+            }
+            catch (RpcException ex)
+            {
+                ctx.LogError($"GoogleAssistant: Exception: {ex.StatusCode}, Detail: {ex.Status.Detail}, Message: {ex.Message}.");
+            }
+        }
+
+        private static async Task SendAudioInChunks(AsyncDuplexStreamingCall<AssistRequest, AssistResponse> call, CommandContext ctx, byte[] buff)
+        {
+            const int frameSize = 1600;
+            for (var i = 0; i < buff.Length; i += frameSize)
+            {
+                var remaining = i + frameSize > buff.Length ? buff.Length % frameSize : 0;
+
+                await call.RequestStream.WriteAsync(new AssistRequest()
+                {
+                    AudioIn = ByteString.CopyFrom(buff, i, remaining == 0 ? frameSize : remaining)
+                });
+            }
+
+            ctx.LogInfo($"GoogleAssistant: Full audio sent: Buffer Length: {buff.Length}");
+        }
+
+        private async Task ReAuth(CommandContext ctx)
+        {
+            ctx.LogInfo($"GoogleAssistant: Attempting to refresh access token.");
+
+            using (IAuthorizationCodeFlow flow =
+                new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+                {
+                    ClientSecrets = new ClientSecrets
+                    {
+                        ClientId = KarvisConfiguration.GoogleAssistantConfiguration.ClientId,
+                        ClientSecret = KarvisConfiguration.GoogleAssistantConfiguration.ClientSecret
+                    },
+                    Scopes = new[] { "https://www.googleapis.com/auth/assistant-sdk-prototype" }
+                }))
+            {
+                var tokenResponse = await flow.RefreshTokenAsync(
+                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser,
+                    new GoogleOAuth(KarvisConfiguration).GetRefreshTokenForUser(ctx.User.Id),
+                    new CancellationToken());
+
+                new GoogleOAuth(KarvisConfiguration).StoreCredentialsForUser(
+                    KarvisConfiguration.GoogleAssistantConfiguration.DebugUser, tokenResponse.AccessToken,
+                    tokenResponse.RefreshToken, ctx.User.Id);
+
+                var channelCredentials = ChannelCredentials.Create(new SslCredentials(),
+                    GoogleGrpcCredentials.FromAccessToken(tokenResponse.AccessToken));
+
+                UserEmbeddedAssistantClients[ctx.User.Id] =
+                    new EmbeddedAssistant.EmbeddedAssistantClient(
+                        new Channel("embeddedassistant.googleapis.com", 443, channelCredentials));
             }
         }
     }

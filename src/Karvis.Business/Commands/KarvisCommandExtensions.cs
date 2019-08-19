@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.VoiceNext;
+using PuppeteerSharp;
 
 namespace Karvis.Business.Commands
 {
@@ -32,9 +35,44 @@ namespace Karvis.Business.Commands
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't do that. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't do that. \n\n``{ex.Message}``");
 
                 throw;
+            }
+        }
+
+        public static void LogInfo(this CommandContext ctx, string message)
+        {
+            ctx.Client.DebugLogger.LogMessage(LogLevel.Info, Constants.ApplicationName, message, DateTime.Now);
+        }
+
+        public static void LogError(this CommandContext ctx, string message)
+        {
+            ctx.Client.DebugLogger.LogMessage(LogLevel.Error, Constants.ApplicationName, message, DateTime.Now);
+        }
+
+        public static async Task RespondWithHtmlAsImage(this CommandContext ctx, string html)
+        {
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+
+            using (var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                DefaultViewport = new ViewPortOptions()
+                    { IsLandscape = true, Width = 1280, Height = 720 },
+                Headless = true,
+                Args = new[] { "--no-sandbox" }
+            }))
+            using (var page = await browser.NewPageAsync())
+            {
+                await page.SetContentAsync(html);
+                var result = await page.GetContentAsync();
+                await page.WaitForTimeoutAsync(500);
+                var data = await page.ScreenshotDataAsync();
+
+                using (var ms = new MemoryStream(data))
+                {
+                    await ctx.RespondWithFileAsync($"{Guid.NewGuid()}.jpg", ms);
+                }
             }
         }
     }

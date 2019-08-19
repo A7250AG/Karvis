@@ -1,40 +1,10 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
-using DSharpPlus.Entities;
-using DSharpPlus.EventArgs;
 using DSharpPlus.Interactivity;
-using DSharpPlus.Lavalink;
-using DSharpPlus.Lavalink.EventArgs;
-using DSharpPlus.Net;
 using DSharpPlus.VoiceNext;
-using DSharpPlus.VoiceNext.EventArgs;
-using Karvis.Business.Audio;
-using Karvis.Business.Speech;
 using Karvis.Business.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Google.Assistant.Embedded.V1Alpha2;
-using Google;
-using Google.Apis.Auth.OAuth2;
-using Google.Apis.Auth.OAuth2.Flows;
-using Google.Apis.Auth.OAuth2.Responses;
-using Google.Protobuf;
-using Grpc;
-using Grpc.Auth;
-using Grpc.Core;
-using Grpc.Core.Utils;
-using Karvis.Business.Infrastructure;
-using Microsoft.Win32.SafeHandles;
-using PuppeteerSharp;
 
 namespace Karvis.Business.Commands
 {
@@ -88,7 +58,7 @@ namespace Karvis.Business.Commands
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't leave. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't leave. \n\n``{ex.Message}``");
             }
         }
     }

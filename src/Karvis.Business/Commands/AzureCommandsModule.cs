@@ -42,16 +42,16 @@ namespace Karvis.Business.Commands
     {
         private readonly KarvisConfiguration KarvisConfiguration;
 
+        private static readonly ConcurrentDictionary<ulong, ConcurrentDictionary<ulong, AsyncEventHandler<UserSpeakingEventArgs>>> UserSpeakingHandlers
+            = new ConcurrentDictionary<ulong, ConcurrentDictionary<ulong, AsyncEventHandler<UserSpeakingEventArgs>>>();
+
         public AzureCommandsModule(IKarvisConfigurationService configuration)
         {
             KarvisConfiguration = configuration.Configuration;
         }
 
-        private static ConcurrentDictionary<ulong, ConcurrentDictionary<ulong, AsyncEventHandler<UserSpeakingEventArgs>>> UserSpeakingHandlers 
-            = new ConcurrentDictionary<ulong, ConcurrentDictionary<ulong, AsyncEventHandler<UserSpeakingEventArgs>>>();
-
         [Command("azurespeech")]
-        public async Task ToggleAzureSpeech(CommandContext ctx, string value)
+        public async Task ToggleAzureSpeech(CommandContext ctx, string value = "on")
         {
             AsyncEventHandler<UserSpeakingEventArgs> handler = null;
 
@@ -118,16 +118,14 @@ namespace Karvis.Business.Commands
                     await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsup:"));
 
                     voiceConnection.SendSpeaking(); // send a speaking indicator
-
                     await voiceConnection.GetTransmitStream().WriteAsync(buffer, 0, buffer.Length);
                     await voiceConnection.GetTransmitStream().FlushAsync();
-
                     voiceConnection.SendSpeaking(false); // end the speaking indicator
                 }
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't say. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't say. \n\n``{ex.Message}``");
             }
         }
 
@@ -151,7 +149,7 @@ namespace Karvis.Business.Commands
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't rawsay. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't rawsay. \n\n``{ex.Message}``");
             }
         }
 
@@ -177,7 +175,7 @@ namespace Karvis.Business.Commands
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't simonsay. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't simonsay. \n\n``{ex.Message}``");
             }
         }
 

@@ -36,7 +36,7 @@ namespace Karvis.Business.Commands
             }
             catch (Exception ex)
             {
-                await ctx.Channel.SendMessageAsync($"Sorry, {ctx.User.Username}, I can't join. \n\n``{ex.Message}``");
+                await ctx.RespondAsync($"Sorry, {ctx.User.Username}, I can't join. \n\n``{ex.Message}``");
             }
         }
 
