@@ -47,7 +47,7 @@ namespace Karvis.Business.Speech
                 await recognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
 
                 // Send the pcm data to the speech recognizer
-                pushStream.Write(AudioConverter.Resample(pcm, 48000, 16000, 2, 1));
+                pushStream.Write(pcm);
                 pushStream.Close();
 
                 // Wait for completion.

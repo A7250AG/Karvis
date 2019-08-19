@@ -98,8 +98,8 @@ namespace Karvis.Business.Commands
                     await ctx.RespondAsync(DiscordEmoji.FromName(ctx.Client, ":thumbsup:"));
 
                     voiceConnection.SendSpeaking(); // send a speaking indicator
-                    await voiceConnection.GetTransmitStream().WriteAsync(buffer, 0, buffer.Length);
-                    await voiceConnection.GetTransmitStream().FlushAsync();
+                    voiceConnection.GetTransmitStream().Write(buffer, 0, buffer.Length);
+                    voiceConnection.GetTransmitStream().Flush();
                     voiceConnection.SendSpeaking(false); // end the speaking indicator
                 }
             }
@@ -120,11 +120,11 @@ namespace Karvis.Business.Commands
                 if (!audio.SpeechFromUser.ContainsKey(ctx.User.Id) || audio.SpeechFromUser[ctx.User.Id].IsEmpty)
                     throw new InvalidOperationException("You haven't said or preserved anything for me to say.");
 
-                var buff = audio.SpeechFromUser[ctx.User.Id].ToArray();
+                var buffer = audio.SpeechFromUser[ctx.User.Id].ToArray();
 
                 voiceConnection.SendSpeaking();
-                await voiceConnection.GetTransmitStream().WriteAsync(buff, 0, buff.Length);
-                await voiceConnection.GetTransmitStream().FlushAsync();
+                voiceConnection.GetTransmitStream().Write(buffer, 0, buffer.Length);
+                voiceConnection.GetTransmitStream().Flush();
                 voiceConnection.SendSpeaking(false);
             }
             catch (Exception ex)
@@ -149,8 +149,8 @@ namespace Karvis.Business.Commands
                 byte[] resampled = AudioConverter.Resample(buff, @in, @out, inChan, outChan);
 
                 voiceConnection.SendSpeaking();
-                await voiceConnection.GetTransmitStream().WriteAsync(resampled, 0, resampled.Length);
-                await voiceConnection.GetTransmitStream().FlushAsync();
+                voiceConnection.GetTransmitStream().Write(resampled, 0, resampled.Length);
+                voiceConnection.GetTransmitStream().Flush();
                 voiceConnection.SendSpeaking(false);
             }
             catch (Exception ex)
@@ -195,8 +195,8 @@ namespace Karvis.Business.Commands
         {
             var buff = args.PcmData.ToArray();
 
-            await voiceConnection.GetTransmitStream().WriteAsync(buff, 0, buff.Length);
-            await voiceConnection.GetTransmitStream().FlushAsync();
+            voiceConnection.GetTransmitStream().Write(buff, 0, buff.Length);
+            voiceConnection.GetTransmitStream().Flush();
         }
 
         public async Task OnVoiceReceived(VoiceReceiveEventArgs args)
@@ -230,7 +230,19 @@ namespace Karvis.Business.Commands
 
                     var buff = audio.SpeechFromUser[args.User.Id].ToArray();
 
-                    byte[] resampled = AudioConverter.Resample(buff, 4000, 16000, 2, 1);
+                    using (var stream = new FileStream($"azure-original-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
+                    {
+                        await stream.WriteAsync(buff, 0, buff.Length);
+                        stream.Flush(true);
+                    }
+
+                    byte[] resampled = AudioConverter.Resample(buff, 48000, 16000, 1, 1);
+
+                    using (var stream = new FileStream($"azure-resampled-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
+                    {
+                        await stream.WriteAsync(resampled, 0, resampled.Length);
+                        stream.Flush(true);
+                    }
 
                     var text = await new AzureSpeechModule(KarvisConfiguration, args.Client.DebugLogger).AudioToTextAsync(resampled);
 
