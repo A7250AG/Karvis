@@ -230,19 +230,7 @@ namespace Karvis.Business.Commands
 
                     var buff = audio.SpeechFromUser[args.User.Id].ToArray();
 
-                    using (var stream = new FileStream($"azure-original-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                    {
-                        await stream.WriteAsync(buff, 0, buff.Length);
-                        stream.Flush(true);
-                    }
-
                     byte[] resampled = AudioConverter.Resample(buff, 48000, 16000, 1, 1);
-
-                    using (var stream = new FileStream($"azure-resampled-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                    {
-                        await stream.WriteAsync(resampled, 0, resampled.Length);
-                        stream.Flush(true);
-                    }
 
                     var text = await new AzureSpeechModule(KarvisConfiguration, args.Client.DebugLogger).AudioToTextAsync(resampled);
 

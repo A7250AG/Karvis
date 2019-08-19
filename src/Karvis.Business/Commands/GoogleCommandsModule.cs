@@ -92,7 +92,7 @@ namespace Karvis.Business.Commands
                     if (!UserSpeakingHandlers.ContainsKey(ctx.User.Id))
                         UserSpeakingHandlers.TryAdd(ctx.User.Id, new ConcurrentDictionary<ulong, AsyncEventHandler<UserSpeakingEventArgs>>());
                     if (!UserSpeakingHandlers[ctx.User.Id].ContainsKey(ctx.Channel.Id))
-                        UserSpeakingHandlers[ctx.User.Id].TryAdd(ctx.Channel.Id, (args) => OnUserSpeaking(args, ctx.Channel));
+                        UserSpeakingHandlers[ctx.User.Id].TryAdd(ctx.Channel.Id, (args) => OnUserSpeaking(args, ctx));
 
                     voiceConnection.VoiceReceived += OnVoiceReceived;
                     voiceConnection.UserSpeaking += UserSpeakingHandlers[ctx.User.Id][ctx.Channel.Id];
@@ -375,27 +375,6 @@ namespace Karvis.Business.Commands
 
             try
             {
-                if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
-                {
-                    ctx.LogInfo($"GoogleAssistant: Received supplemental text.");
-
-                    tasks.Add(Task.Run(() => ctx.RespondAsync(response.DialogStateOut?.SupplementalDisplayText)));
-                }
-
-                if (response.ScreenOut != null)
-                {
-                    ctx.LogInfo($"GoogleAssistant: Received screen data.");
-
-                    tasks.Add(Task.Run(() => ctx.RespondWithHtmlAsImage(response.ScreenOut.Data.ToStringUtf8())));
-                }
-
-                if (response.AudioOut?.AudioData != null)
-                {
-                    ctx.LogInfo($"GoogleAssistant: Received audio data.");
-
-                    audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
-                }
-
                 if (response.EventType == AssistResponse.Types.EventType.EndOfUtterance)
                 {
                     ctx.LogInfo($"GoogleAssistant: Utterance detected: Event Type: {response.EventType.ToString()}, Supplemental Text: {response.DialogStateOut?.SupplementalDisplayText}, Transcript: {response.SpeechResults?.FirstOrDefault()?.Transcript} , Debug Info: {response.DebugInfo?.ToString()}");
@@ -405,6 +384,27 @@ namespace Karvis.Business.Commands
                 else
                 {
                     ctx.LogInfo($"GoogleAssistant: Received response: Event Type: {response.EventType.ToString()}, Microphone Mode: {response.DialogStateOut?.MicrophoneMode}, Debug Info: {response.DebugInfo}");
+
+                    if (!string.IsNullOrWhiteSpace(response.DialogStateOut?.SupplementalDisplayText))
+                    {
+                        ctx.LogInfo($"GoogleAssistant: Received supplemental text.");
+
+                        tasks.Add(Task.Run(() => ctx.RespondAsync(response.DialogStateOut?.SupplementalDisplayText)));
+                    }
+
+                    if (response.ScreenOut != null)
+                    {
+                        ctx.LogInfo($"GoogleAssistant: Received screen data.");
+
+                        tasks.Add(Task.Run(() => ctx.RespondWithHtmlAsImage(response.ScreenOut.Data.ToStringUtf8())));
+                    }
+
+                    if (response.AudioOut?.AudioData != null)
+                    {
+                        ctx.LogInfo($"GoogleAssistant: Received audio data.");
+
+                        audioOut.AddRange(response.AudioOut.AudioData.ToByteArray());
+                    }
                 }
             }
             catch (RpcException ex)
@@ -436,39 +436,15 @@ namespace Karvis.Business.Commands
             }
         }
 
-        private async Task OnUserSpeaking(UserSpeakingEventArgs args, DiscordChannel responseChannel)
+        private async Task OnUserSpeaking(UserSpeakingEventArgs args, CommandContext ctx)
         {
             if (args.User != null)
             {
                 if (args.Speaking == false)
                 {
                     var audio = args.Client.GetCommandsNext().Services.GetService<IProvideAudioState>();
-
-                    var buff = audio.SpeechFromUser[args.User.Id].ToArray();
-
-                    using (var stream = new FileStream($"azure-original-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                    {
-                        await stream.WriteAsync(buff, 0, buff.Length);
-                        stream.Flush(true);
-                    }
-
-                    byte[] resampled = AudioConverter.Resample(buff, 48000, 16000, 1, 1);
-
-                    using (var stream = new FileStream($"azure-resampled-{DateTime.Now.ToFileTime()}.wav", FileMode.Create))
-                    {
-                        await stream.WriteAsync(resampled, 0, resampled.Length);
-                        stream.Flush(true);
-                    }
-
-                    var context = args.Client.GetCommandsNext().CreateFakeContext(
-                        args.User,
-                        await (await args.Client.GetGuildAsync(Constants.Guild_Karvis)).GetMemberAsync(args.User.Id)
-                            .Result.CreateDmChannelAsync(),
-                        ";;assist",
-                        ";;",
-                        args.Client.GetCommandsNext().FindCommand("assist", out var _));
-
-                    await Assist(context);
+                    
+                    await Assist(ctx);
                     
                     if (audio.IsSpeechPreservedForUser.ContainsKey(args.User.Id) && !args.Client.GetCommandsNext().Services.GetService<IProvideAudioState>().IsSpeechPreservedForUser[args.User.Id]) audio.SpeechFromUser[args.User.Id] = new ConcurrentQueue<byte>();
                 }
