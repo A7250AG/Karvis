@@ -23,7 +23,7 @@
     <PackageReference Include="DSharpPlus.Lavalink" Version="4.0.0-nightly-00624" />
     <PackageReference Include="DSharpPlus.VoiceNext" Version="4.0.0-nightly-00624" />
     <PackageReference Include="Google.Apis.Oauth2.v2" Version="1.40.3.1602" />
-    <PackageReference Include="Google.Protobuf" Version="3.9.1" />
+    <PackageReference Include="Google.Protobuf" Version="3.15.0" />
     <PackageReference Include="Grpc" Version="1.22.0" />
     <PackageReference Include="Grpc.Auth" Version="1.0.1" />
     <PackageReference Include="Grpc.Tools" Version="1.22.0">
